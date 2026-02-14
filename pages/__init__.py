@@ -6,6 +6,7 @@ from pages.cart_page import CartPage
 from pages.search_page import SearchPage
 from pages.register_page import RegisterPage
 from pages.login_page import LoginPage
+from pages.checkout_page import CheckoutPage
 
 __all__ = [
     "HomePage",
@@ -14,4 +15,5 @@ __all__ = [
     "SearchPage",
     "RegisterPage",
     "LoginPage",
+    "CheckoutPage",
 ]

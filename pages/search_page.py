@@ -15,6 +15,7 @@ class SearchPage(BasePage):
     SEARCH_RESULTS = ".product-thumb"
     PRODUCT_NAME = ".product-thumb .description h4 a"
     PRODUCT_PRICE = ".product-thumb .description .price"
+    PRODUCT_IMAGE = ".product-thumb .image img"
     NO_RESULTS_MESSAGE = "#content p"
     PAGE_HEADING = "#content h1"
     SEARCH_CRITERIA_CHECKBOX = "#input-description"
@@ -54,3 +55,12 @@ class SearchPage(BasePage):
         buttons = self.page.locator(self.ADD_TO_CART_BUTTON).all()
         if index < len(buttons):
             buttons[index].click()
+
+    def get_result_prices(self) -> list[str]:
+        """Return a list of product prices from search results."""
+        elements = self.page.locator(self.PRODUCT_PRICE).all()
+        return [el.text_content() or "" for el in elements]
+
+    def get_result_images_count(self) -> int:
+        """Return the number of product images in search results."""
+        return self.page.locator(self.PRODUCT_IMAGE).count()

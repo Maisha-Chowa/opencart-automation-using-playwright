@@ -18,8 +18,12 @@ class LoginPage(BasePage):
     ERROR_ALERT = ".alert-danger"
     MY_ACCOUNT_HEADING = "#content h2"
     REGISTER_LINK = "a:has-text('Continue')"
+    MY_ACCOUNT_DROPDOWN = "a[title='My Account']"
+    LOGOUT_LINK = "a:has-text('Logout')"
+    LOGOUT_HEADING = "#content h1"
 
     LOGIN_URL_PATH = "/index.php?route=account/login"
+    LOGOUT_URL_PATH = "/index.php?route=account/logout"
 
     def __init__(self, page: Page, base_url: str):
         super().__init__(page)
@@ -49,3 +53,14 @@ class LoginPage(BasePage):
     def click_forgotten_password(self):
         """Click the Forgotten Password link."""
         self.click(self.FORGOTTEN_PASSWORD_LINK)
+
+    def logout(self):
+        """Logout by clicking My Account dropdown then Logout link."""
+        self.click(self.MY_ACCOUNT_DROPDOWN)
+        self.click(self.LOGOUT_LINK)
+        self.page.wait_for_load_state("networkidle")
+
+    def is_logout_successful(self) -> bool:
+        """Check if logout was successful by verifying the logout confirmation page."""
+        heading = self.get_text(self.LOGOUT_HEADING)
+        return "logout" in heading.lower() if heading else False

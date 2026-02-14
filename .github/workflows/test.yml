@@ -1,0 +1,107 @@
+name: OpenCart Playwright Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+
+    name: Tests (${{ matrix.browser }})
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Playwright browsers
+        run: playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Start OpenCart with Docker Compose
+        run: docker compose up -d
+
+      - name: Wait for OpenCart to be ready
+        run: |
+          echo "Waiting for OpenCart to initialize..."
+          for i in $(seq 1 60); do
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost | grep -q "200\|302"; then
+              echo "OpenCart is responding (attempt $i)"
+              break
+            fi
+            echo "Waiting... (attempt $i/60)"
+            sleep 5
+          done
+
+      - name: Run OpenCart installer
+        run: |
+          # Complete the OpenCart installation automatically
+          curl -sL -X POST "http://localhost/install/index.php?route=install/step_3&language=en-gb" \
+            -d "db_driver=mysqli" \
+            -d "db_hostname=database" \
+            -d "db_username=root" \
+            -d "db_password=opencart_password" \
+            -d "db_database=opencart" \
+            -d "db_prefix=oc_" \
+            -d "db_port=3306" \
+            -d "username=admin" \
+            -d "password=admin123" \
+            -d "email=admin@example.com" \
+            -o /dev/null -w "Install HTTP status: %{http_code}\n"
+
+          # Remove the install directory
+          docker exec opencart-app rm -rf /var/www/html/install
+
+          # Verify storefront is accessible
+          echo "Verifying storefront..."
+          curl -sL http://localhost | grep -q "<title>" && echo "Storefront is ready!" || echo "Warning: Storefront may not be ready"
+
+      - name: Run Playwright tests
+        run: pytest --browser ${{ matrix.browser }} -m "not admin"
+        env:
+          BASE_URL: http://localhost
+          ADMIN_URL: http://localhost/admin
+          HEADLESS: "true"
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ matrix.browser }}
+          path: screenshots/
+          retention-days: 14
+
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: traces-${{ matrix.browser }}
+          path: traces/
+          retention-days: 14
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-${{ matrix.browser }}
+          path: allure-results/
+          retention-days: 14
+
+      - name: Stop Docker containers
+        if: always()
+        run: docker compose down -v

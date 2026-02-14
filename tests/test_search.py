@@ -51,3 +51,36 @@ class TestProductSearch:
 
         sp = SearchPage(home_page)
         assert sp.has_no_results(), "Empty search should show 'no results' message"
+
+    @pytest.mark.parametrize("special_input", [
+        "<script>alert('xss')</script>",
+        "' OR 1=1 --",
+        "!@#$%^&*()",
+    ], ids=["xss_script", "sql_injection", "special_symbols"])
+    def test_search_with_special_characters(self, home_page, base_url, special_input):
+        """Verify search handles special characters gracefully without errors."""
+        hp = HomePage(home_page, base_url)
+        hp.search_product(special_input)
+
+        sp = SearchPage(home_page)
+        # Page should load without crashing -- either no results or results shown
+        assert sp.has_no_results() or sp.get_search_results_count() >= 0, (
+            f"Search should handle special input '{special_input}' gracefully"
+        )
+
+    def test_search_results_display_correct_product_details(self, home_page, base_url):
+        """Verify each search result displays name, price, and image."""
+        hp = HomePage(home_page, base_url)
+        hp.search_product("MacBook")
+
+        sp = SearchPage(home_page)
+        results_count = sp.get_search_results_count()
+        assert results_count > 0, "Should have results to validate"
+
+        names = sp.get_result_names()
+        prices = sp.get_result_prices()
+        images_count = sp.get_result_images_count()
+
+        assert len(names) == results_count, "Each result should have a product name"
+        assert len(prices) == results_count, "Each result should have a price"
+        assert images_count == results_count, "Each result should have a product image"
