@@ -1,0 +1,44 @@
+services:
+  database:
+    image: mysql:8.1
+    container_name: opencart-db
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      - MYSQL_DATABASE=opencart
+      - MYSQL_ROOT_PASSWORD=opencart_password
+    restart: always
+    volumes:
+      - database_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-popencart_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - opencart-network
+
+  opencart:
+    image: aamservices/opencart:4.0.0.0
+    container_name: opencart-app
+    restart: always
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - opencart_html:/var/www
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - opencart-network
+
+volumes:
+  database_data:
+    driver: local
+  opencart_html:
+    driver: local
+
+networks:
+  opencart-network:
+    driver: bridge

@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+
+# Test Reports
+reports/
+allure-results/
+allure-report/
+test-results/
+*.html
+
+# Playwright
+playwright-report/
+test-results/
+playwright/.cache/
+
+# Docker
+mariadb_data/
+opencart_data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Screenshots & Videos (generated during test runs)
+screenshots/
+videos/
+traces/
