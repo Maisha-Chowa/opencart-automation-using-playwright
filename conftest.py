@@ -24,13 +24,23 @@ TRACES_DIR = Path("traces")
 
 
 @pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args):
+    """Override browser launch args to respect HEADLESS and SLOW_MO from .env."""
+    return {
+        **browser_type_launch_args,
+        "headless": HEADLESS,
+        "slow_mo": SLOW_MO,
+    }
+
+
+@pytest.fixture(scope="session")
 def browser_context_args(browser_context_args):
     """Override default browser context arguments."""
     return {
         **browser_context_args,
-        "viewport": {"width": 1920, "height": 1080},
+        "viewport": {"width": 1366, "height": 768},
         "ignore_https_errors": True,
-        "record_video_dir": None,
+        "record_video_dir": "videos",
     }
 
 

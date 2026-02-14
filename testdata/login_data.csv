@@ -1,0 +1,8 @@
+test_id,email,password,expected_result,expected_error
+positive_valid,user@gmail.com,mchowa,pass,
+negative_wrong_password,user@gmail.com,WrongPass123,fail,Warning
+negative_unregistered_email,nonexistent_9999@example.com,Test@1234,fail,Warning
+negative_invalid_email_format,not-an-email,Test@1234,fail,Warning
+blank_email,,mchowa,fail,Warning
+blank_password,user@gmail.com,,fail,Warning
+blank_both,,,fail,Warning
