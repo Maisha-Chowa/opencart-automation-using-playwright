@@ -46,3 +46,10 @@ Thumbs.db
 screenshots/
 videos/
 traces/
+
+# Playwright
+node_modules/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
