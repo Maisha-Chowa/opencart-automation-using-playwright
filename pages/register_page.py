@@ -105,6 +105,13 @@ class RegisterPage(BasePage):
         # Wait for AJAX processing and any JS redirect
         self.page.wait_for_load_state("networkidle")
 
+    def logout(self):
+        """Log out the currently logged-in user via the My Account dropdown."""
+        self.navigate(self.base_url)
+        self.page.locator("a.dropdown-toggle", has_text="My Account").first.click()
+        self.page.get_by_role("link", name="Logout").click()
+        self.page.wait_for_load_state("networkidle")
+
     def is_registration_successful(self) -> bool:
         """Check if registration was successful by verifying the URL or title.
 

@@ -116,10 +116,7 @@ class TestRegisterDataDriven:
             time.sleep(VISUAL_DELAY)
 
             # Log out (user is auto-logged-in after registration)
-            page.goto(base_url)
-            page.locator("a.dropdown-toggle", has_text="My Account").first.click()
-            page.get_by_role("link", name="Logout").click()
-            page.wait_for_load_state("networkidle")
+            rp.logout()
 
         # ── Open register page and fill form with CSV values ────
         rp.open()
