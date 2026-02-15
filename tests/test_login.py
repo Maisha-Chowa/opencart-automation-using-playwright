@@ -1,7 +1,9 @@
 """
 Test Suite: User Login / Logout
-Covers visibility, positive, negative, blank, and CSV data-driven tests.
+Covers visibility checks and fully data-driven tests from login_data.csv.
 """
+
+import time
 
 import pytest
 from pages.login_page import LoginPage
@@ -12,7 +14,28 @@ from utilities.csv_reader import read_csv
 # ── Load CSV data once ──────────────────────────────────────────
 LOGIN_CSV_DATA = read_csv("login_data.csv")
 
+# Delay (seconds) after each form submission so you can visually inspect the result.
+# Set to 0 when you no longer need visual debugging.
+VISUAL_DELAY = 2
 
+
+# ── Helper: resolve placeholders in CSV values ──────────────────
+def _resolve(
+    value: str,
+    registered_email: str = "",
+    registered_password: str = "",
+) -> str:
+    """Replace CSV placeholders with actual runtime values."""
+    if "{registered_email}" in value:
+        return registered_email
+    if "{registered_password}" in value:
+        return registered_password
+    return value
+
+
+# ================================================================
+# Visibility Tests (no CSV data needed)
+# ================================================================
 @pytest.mark.account
 @pytest.mark.regression
 class TestLoginPageVisibility:
@@ -35,6 +58,12 @@ class TestLoginPageVisibility:
         lp = LoginPage(page, base_url)
         lp.open()
         lp.verify_returning_customer_text_visible()
+
+    def test_email_label_visible(self, page, base_url):
+        """'E-Mail Address' label should be visible."""
+        lp = LoginPage(page, base_url)
+        lp.open()
+        lp.verify_email_label_visible()
 
     def test_email_input_visible(self, page, base_url):
         """E-Mail Address input should be visible."""
@@ -66,163 +95,95 @@ class TestLoginPageVisibility:
         lp.open()
         lp.verify_login_button_visible()
 
+    def test_new_customer_section_visible(self, page, base_url):
+        """'Register Account' section should be visible."""
+        lp = LoginPage(page, base_url)
+        lp.open()
+        lp.verify_new_customer_section_visible()
 
+    def test_new_customer_description_visible(self, page, base_url):
+        """'By creating an account you' description should be visible."""
+        lp = LoginPage(page, base_url)
+        lp.open()
+        lp.verify_new_customer_description_visible()
+
+
+# ================================================================
+# Data-Driven Tests (all values from login_data.csv)
+# ================================================================
 @pytest.mark.account
 @pytest.mark.regression
-class TestLoginPositive:
-    """Positive login tests."""
+class TestLoginDataDriven:
+    """Data-driven login tests — every scenario is defined in login_data.csv."""
 
-    @pytest.fixture()
-    def registered_user(self, page, base_url):
-        """Register a fresh user and return credentials for login tests."""
+    @pytest.fixture(autouse=True)
+    def _register_user(self, page, base_url):
+        """Register a fresh user before each test and store credentials.
+
+        Each parametrized test gets a new page context, so we register
+        a unique user and log out to leave the browser in a clean state.
+        """
         rp = RegisterPage(page, base_url)
         rp.open()
 
-        email = generate_unique_email("login_pos")
-        password = "Test@1234"
+        self._registered_email = generate_unique_email("login")
+        self._registered_password = "Test@1234"
 
         rp.register(
             first_name="Login",
             last_name="Tester",
-            email=email,
-            password=password,
+            email=self._registered_email,
+            password=self._registered_password,
             agree_privacy=True,
         )
-        rp.page.wait_for_load_state("networkidle")
+        time.sleep(VISUAL_DELAY)
 
-        # Logout after registration so we can test login
-        lp = LoginPage(page, base_url)
-        lp.logout()
-
-        return {"email": email, "password": password}
-
-    @pytest.mark.smoke
-    def test_login_with_valid_credentials(self, page, base_url, registered_user):
-        """A registered user can log in successfully."""
-        lp = LoginPage(page, base_url)
-        lp.open()
-        lp.login(registered_user["email"], registered_user["password"])
-        assert lp.is_login_successful(), "Should redirect to account page after login"
-
-    def test_logout_successfully(self, page, base_url, registered_user):
-        """A logged-in user can logout and sees confirmation."""
-        lp = LoginPage(page, base_url)
-        lp.open()
-        lp.login(registered_user["email"], registered_user["password"])
-        assert lp.is_login_successful(), "Login should succeed before testing logout"
-
-        lp.logout()
-        assert lp.is_logout_successful(), "Should see logout confirmation page"
-
-
-@pytest.mark.account
-@pytest.mark.regression
-class TestLoginNegative:
-    """Negative login tests."""
-
-    def test_login_with_wrong_password(self, page, base_url):
-        """Login should fail with incorrect password."""
-        lp = LoginPage(page, base_url)
-        lp.open()
-        lp.login("user@gmail.com", "WrongPass123")
-        error = lp.get_error_message()
-        assert "warning" in error.lower(), f"Expected warning, got: {error}"
-
-    def test_login_with_unregistered_email(self, page, base_url):
-        """Login should fail with an email that is not registered."""
-        lp = LoginPage(page, base_url)
-        lp.open()
-        lp.login("nonexistent_9999@example.com", "Test@1234")
-        error = lp.get_error_message()
-        assert "warning" in error.lower(), f"Expected warning, got: {error}"
-
-    def test_login_with_invalid_email_format(self, page, base_url):
-        """Login should fail with a malformed email."""
-        lp = LoginPage(page, base_url)
-        lp.open()
-        lp.login("not-an-email", "Test@1234")
-        error = lp.get_error_message()
-        assert "warning" in error.lower(), f"Expected warning, got: {error}"
-
-
-@pytest.mark.account
-@pytest.mark.regression
-class TestLoginBlankFields:
-    """Blank / empty field login tests."""
-
-    def test_login_with_blank_email(self, page, base_url):
-        """Login should fail when email is blank."""
-        lp = LoginPage(page, base_url)
-        lp.open()
-        lp.login("", "mchowa")
-        error = lp.get_error_message()
-        assert "warning" in error.lower(), f"Expected warning, got: {error}"
-
-    def test_login_with_blank_password(self, page, base_url):
-        """Login should fail when password is blank."""
-        lp = LoginPage(page, base_url)
-        lp.open()
-        lp.login("user@gmail.com", "")
-        error = lp.get_error_message()
-        assert "warning" in error.lower(), f"Expected warning, got: {error}"
-
-    def test_login_with_both_fields_blank(self, page, base_url):
-        """Login should fail when both email and password are blank."""
-        lp = LoginPage(page, base_url)
-        lp.open()
-        lp.login("", "")
-        error = lp.get_error_message()
-        assert "warning" in error.lower(), f"Expected warning, got: {error}"
-
-
-@pytest.mark.account
-@pytest.mark.regression
-class TestLoginDataDriven:
-    """Data-driven login tests loaded from login_data.csv."""
-
-    @pytest.fixture()
-    def registered_user(self, page, base_url):
-        """Register a fresh user and return credentials (used by positive CSV rows)."""
-        rp = RegisterPage(page, base_url)
-        rp.open()
-
-        email = generate_unique_email("login_csv")
-        password = "Test@1234"
-
-        rp.register(
-            first_name="CSV",
-            last_name="Tester",
-            email=email,
-            password=password,
-            agree_privacy=True,
-        )
-        rp.page.wait_for_load_state("networkidle")
-
-        lp = LoginPage(page, base_url)
-        lp.logout()
-
-        return {"email": email, "password": password}
+        # Logout after registration (user is auto-logged-in)
+        rp.logout()
 
     @pytest.mark.parametrize(
         "row",
         LOGIN_CSV_DATA,
         ids=[row["test_id"] for row in LOGIN_CSV_DATA],
     )
-    def test_login_from_csv(self, page, base_url, row, registered_user):
-        """Run login test case defined in CSV."""
+    def test_login_from_csv(self, page, base_url, row):
+        """Run a single login test case from CSV."""
         lp = LoginPage(page, base_url)
+        test_id = row["test_id"]
+
+        # ── Open login page and fill form with CSV values ────
         lp.open()
 
-        # For the positive test, use the freshly registered credentials
+        email = _resolve(
+            row["email"], self._registered_email, self._registered_password
+        )
+        password = _resolve(
+            row["password"], self._registered_email, self._registered_password
+        )
+
+        lp.login(email, password)
+        time.sleep(VISUAL_DELAY)
+
+        # ── Assert ──────────────────────────────────────────────
         if row["expected_result"] == "pass":
-            lp.login(registered_user["email"], registered_user["password"])
             assert lp.is_login_successful(), (
-                f"[{row['test_id']}] Login should succeed"
+                f"[{test_id}] Login should succeed"
             )
+
+        elif row["expected_result"] == "pass_logout":
+            assert lp.is_login_successful(), (
+                f"[{test_id}] Login should succeed before testing logout"
+            )
+            lp.logout()
+            assert lp.is_logout_successful(), (
+                f"[{test_id}] Logout should succeed"
+            )
+
         else:
-            lp.login(row["email"], row["password"])
+            # Read page-level error (alerts auto-dismiss after ~7s)
             error = lp.get_error_message()
             expected = row["expected_error"]
             assert expected.lower() in error.lower(), (
-                f"[{row['test_id']}] Expected error containing '{expected}', got: '{error}'"
+                f"[{test_id}] Expected error containing '{expected}', "
+                f"got: '{error}'"
             )
