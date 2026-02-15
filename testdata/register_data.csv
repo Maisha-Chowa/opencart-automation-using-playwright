@@ -1,8 +1,10 @@
 test_id,first_name,last_name,email,password,agree_privacy,expected_result,expected_error
 positive_valid,John,Doe,{unique_email},Test@1234,true,pass,
+positive_long_data,{long_32},{long_32},{unique_email},ValidPass@123,true,pass,
 negative_invalid_email,John,Doe,invalid-email,Test@1234,true,fail,E-Mail
 negative_short_password,John,Doe,{unique_email},12,true,fail,Password
 negative_no_privacy,John,Doe,{unique_email},Test@1234,false,fail,Warning
+negative_existing_email,John,Doe,{existing_email},Test@1234,true,fail,already registered
 blank_first_name,,Doe,{unique_email},Test@1234,true,fail,First Name
 blank_last_name,John,,{unique_email},Test@1234,true,fail,Last Name
 blank_email,John,Doe,,Test@1234,true,fail,E-Mail
