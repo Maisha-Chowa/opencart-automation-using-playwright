@@ -1,0 +1,6 @@
+test_id,firstname,lastname,email,address_1,city,postcode,country,zone,expected_result
+checkout_valid_guest,John,Doe,john.doe@test.com,123 Test St,New York,10001,United States,New York,success
+checkout_missing_firstname,,Doe,jane@test.com,456 Elm Ave,Chicago,60601,United States,Illinois,error
+checkout_missing_lastname,Bob,,bob@test.com,789 Oak Rd,Houston,77001,United States,Texas,error
+checkout_missing_email,Alice,Brown,,321 Pine Ln,Boston,02101,United States,Massachusetts,error
+checkout_invalid_email,Eve,Wilson,not-an-email,100 Maple Dr,Denver,80201,United States,Colorado,error
