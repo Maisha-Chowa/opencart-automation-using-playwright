@@ -1,0 +1,5 @@
+test_id,product_id,name,price,ex_tax,brand,product_code,availability,min_images,has_description,has_specification,description_contains
+product_macbook,43,MacBook,$602.00,Ex Tax: $500.00,Apple,Product 16,In Stock,5,true,true,Intel Core 2 Duo processor
+product_iphone,40,iPhone,$123.20,Ex Tax: $101.00,Apple,product 11,In Stock,6,true,false,revolutionary new mobile phone
+product_apple_cinema,42,"Apple Cinema 30""",$110.00,Ex Tax: $90.00,Apple,Product 15,In Stock,6,true,true,2560 x 1600 pixel resolution
+product_canon,30,Canon EOS 5D,$98.00,Ex Tax: $80.00,Canon,Product 3,In Stock,3,true,false,EOS 5D

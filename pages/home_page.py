@@ -317,6 +317,14 @@ class HomePage(BasePage):
     # Existing helpers (retained for backward compatibility)
     # ================================================================
 
+    def add_featured_product_to_cart(self, index: int = 0):
+        """Alias for ``click_add_to_cart`` (backward compatibility)."""
+        self.click_add_to_cart(index)
+
+    def get_featured_products(self) -> list[str]:
+        """Alias for ``get_featured_product_names`` (backward compatibility)."""
+        return self.get_featured_product_names()
+
     def search_product(self, product_name: str):
         """Search for a product using the search bar."""
         self.fill("input[name='search']", product_name)

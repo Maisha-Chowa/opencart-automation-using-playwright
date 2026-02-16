@@ -17,7 +17,7 @@ class SearchPage(BasePage):
 
     SEARCH_URL_PATH = "index.php?route=product/search&language=en-gb"
 
-    def __init__(self, page: Page, base_url: str):
+    def __init__(self, page: Page, base_url: str = ""):
         super().__init__(page)
         self.base_url = base_url
 
