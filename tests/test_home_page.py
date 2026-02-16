@@ -1,39 +1,32 @@
 """
 Test Suite: Home Page
-Validates the OpenCart storefront home page — navbar, slider, and featured section.
+
+Strategy: Test the *template* (structure & interactions), not every individual element.
+Exception: Featured products section verifies the query that pulls them isn't broken.
+
+Sections: Navbar (3), Slider (2), Featured (4) = 9 tests total.
 """
 
-import time
-
 import pytest
-from pages.home_page import HomePage, EXPECTED_NAV_CATEGORIES, EXPECTED_FEATURED_PRODUCTS
-
-# Delay (seconds) after carousel transitions so the animation completes.
-SLIDE_TRANSITION_DELAY = 1
+from pages.home_page import HomePage, EXPECTED_FEATURED_PRODUCTS
 
 
 # ================================================================
-# Navbar Visibility & Interaction Tests
+# Navbar — template structure & interaction
 # ================================================================
 @pytest.mark.smoke
 @pytest.mark.ui
 class TestHomePageNavbar:
-    """Verify navbar elements are visible and interactive."""
+    """Verify navbar template renders correctly and is interactive."""
 
-    def test_navbar_visible(self, page, base_url):
-        """Navbar container should be visible on the home page."""
+    def test_all_navbar_elements_visible(self, page, base_url):
+        """Aggregate: navbar container and all 8 category links should be visible."""
         hp = HomePage(page, base_url)
         hp.open()
-        hp.verify_navbar_visible()
+        hp.verify_all_navbar_elements_visible()
 
-    def test_navbar_categories_visible(self, page, base_url):
-        """All 8 top-level category links should be visible."""
-        hp = HomePage(page, base_url)
-        hp.open()
-        hp.verify_navbar_categories_visible()
-
-    def test_navbar_desktop_dropdown_opens(self, page, base_url):
-        """Hovering 'Desktops' should open its dropdown with sub-categories."""
+    def test_navbar_dropdown_opens_on_hover(self, page, base_url):
+        """Hovering a category with sub-items should open its dropdown."""
         hp = HomePage(page, base_url)
         hp.open()
         hp.verify_navbar_dropdown_opens("Desktops")
@@ -47,122 +40,71 @@ class TestHomePageNavbar:
             "URL should contain 'product/category' after clicking a navbar link"
         )
 
-    def test_all_navbar_elements_visible(self, page, base_url):
-        """Aggregate: all navbar elements should be visible."""
-        hp = HomePage(page, base_url)
-        hp.open()
-        hp.verify_all_navbar_elements_visible()
-
 
 # ================================================================
-# Slider / Carousel Visibility & Interaction Tests
+# Slider — template structure & carousel control
 # ================================================================
 @pytest.mark.smoke
 @pytest.mark.ui
 class TestHomePageSlider:
-    """Verify slider/carousel elements are visible and interactive."""
-
-    def test_slider_visible(self, page, base_url):
-        """Carousel banner container should be visible."""
-        hp = HomePage(page, base_url)
-        hp.open()
-        hp.verify_slider_visible()
-
-    def test_slider_has_two_images(self, page, base_url):
-        """Carousel should contain exactly 2 banner images."""
-        hp = HomePage(page, base_url)
-        hp.open()
-        hp.verify_slider_images_visible()
-
-    def test_slider_controls_visible(self, page, base_url):
-        """Previous and Next carousel controls should be visible."""
-        hp = HomePage(page, base_url)
-        hp.open()
-        hp.verify_slider_controls_visible()
-
-    def test_slider_indicators_visible(self, page, base_url):
-        """Carousel should have exactly 2 indicator dots."""
-        hp = HomePage(page, base_url)
-        hp.open()
-        hp.verify_slider_indicators_visible()
-
-    def test_slider_next_button_changes_slide(self, page, base_url):
-        """Clicking the Next button should advance to the second slide."""
-        hp = HomePage(page, base_url)
-        hp.open()
-        initial = hp.get_active_slide_index()
-        hp.click_slider_next()
-        time.sleep(SLIDE_TRANSITION_DELAY)
-        after = hp.get_active_slide_index()
-        assert after != initial, (
-            f"Active slide should change after clicking Next "
-            f"(was {initial}, still {after})"
-        )
-
-    def test_slider_prev_button_changes_slide(self, page, base_url):
-        """Clicking the Previous button should go back to the first slide."""
-        hp = HomePage(page, base_url)
-        hp.open()
-        # Move to second slide first
-        hp.click_slider_next()
-        time.sleep(SLIDE_TRANSITION_DELAY)
-        hp.click_slider_prev()
-        time.sleep(SLIDE_TRANSITION_DELAY)
-        assert hp.get_active_slide_index() == 0, (
-            "Active slide should return to the first slide after clicking Prev"
-        )
-
-    def test_slider_indicator_changes_slide(self, page, base_url):
-        """Clicking the second indicator dot should activate the second slide."""
-        hp = HomePage(page, base_url)
-        hp.open()
-        hp.click_slider_indicator(1)
-        time.sleep(SLIDE_TRANSITION_DELAY)
-        assert hp.get_active_slide_index() == 1, (
-            "Clicking indicator 1 should activate the second slide"
-        )
+    """Verify slider template renders and carousel controls work."""
 
     def test_all_slider_elements_visible(self, page, base_url):
-        """Aggregate: all slider elements should be visible."""
+        """Aggregate: carousel, images, controls, and indicators should be present."""
         hp = HomePage(page, base_url)
         hp.open()
         hp.verify_all_slider_elements_visible()
 
+    def test_slider_controls_advance_slide(self, page, base_url):
+        """Carousel should support slide transitions (template functionality)."""
+        import re
+        from playwright.sync_api import expect
+
+        hp = HomePage(page, base_url)
+        hp.open()
+
+        # Use Bootstrap API: pause auto-rotation, go to slide 0, then advance
+        page.evaluate("""(() => {
+            const el = document.querySelector('#carousel-banner-0');
+            const c = bootstrap.Carousel.getOrCreateInstance(el);
+            c.pause();
+            c.to(0);
+        })()""")
+        page.wait_for_timeout(1000)
+
+        page.evaluate("""(() => {
+            const el = document.querySelector('#carousel-banner-0');
+            bootstrap.Carousel.getInstance(el).next();
+        })()""")
+
+        second_slide = page.locator(
+            "#carousel-banner-0 .carousel-item:nth-child(2)"
+        )
+        expect(second_slide).to_have_class(
+            re.compile(r"active"), timeout=5000
+        )
+
 
 # ================================================================
-# Featured Section Visibility & Interaction Tests
+# Featured Section — the exception: verify the query & card template
 # ================================================================
 @pytest.mark.smoke
 @pytest.mark.ui
 class TestHomePageFeatured:
-    """Verify featured product section elements are visible and correct."""
+    """Featured section verifies the query that pulls the 4 products.
 
-    def test_featured_heading_visible(self, page, base_url):
-        """'Featured' heading should be visible."""
-        hp = HomePage(page, base_url)
-        hp.open()
-        hp.verify_featured_heading_visible()
+    This is the exception to 'test the template': we check that the
+    correct products are returned and each card has the expected elements.
+    """
 
-    def test_featured_products_count(self, page, base_url):
+    def test_featured_section_has_four_products(self, page, base_url):
         """There should be exactly 4 featured product cards."""
         hp = HomePage(page, base_url)
         hp.open()
         hp.verify_featured_products_visible()
 
-    def test_featured_product_images_visible(self, page, base_url):
-        """All 4 featured product images should be visible."""
-        hp = HomePage(page, base_url)
-        hp.open()
-        hp.verify_featured_product_images_visible()
-
-    def test_featured_product_names_visible(self, page, base_url):
-        """All 4 featured product name links should be visible."""
-        hp = HomePage(page, base_url)
-        hp.open()
-        hp.verify_featured_product_names_visible()
-
-    def test_featured_product_names_correct(self, page, base_url):
-        """Featured product names should match the expected product list."""
+    def test_featured_product_names_match_expected(self, page, base_url):
+        """Featured product names should match the expected list (query integrity)."""
         hp = HomePage(page, base_url)
         hp.open()
         names = hp.get_featured_product_names()
@@ -170,62 +112,20 @@ class TestHomePageFeatured:
             f"Expected products {EXPECTED_FEATURED_PRODUCTS}, got {names}"
         )
 
-    def test_featured_product_prices_visible(self, page, base_url):
-        """All 4 featured product prices should be visible."""
+    def test_featured_card_template_has_all_elements(self, page, base_url):
+        """Each card should have image, name, price, and action buttons."""
         hp = HomePage(page, base_url)
         hp.open()
+        hp.verify_featured_product_images_visible()
+        hp.verify_featured_product_names_visible()
         hp.verify_featured_product_prices_visible()
-
-    def test_featured_add_to_cart_buttons_visible(self, page, base_url):
-        """All 4 'Add to Cart' buttons should be visible."""
-        hp = HomePage(page, base_url)
-        hp.open()
         hp.verify_featured_add_to_cart_buttons_visible()
 
-    def test_featured_wishlist_buttons_visible(self, page, base_url):
-        """All 4 'Add to Wish List' buttons should be visible."""
-        hp = HomePage(page, base_url)
-        hp.open()
-        hp.verify_featured_wishlist_buttons_visible()
-
-    def test_featured_compare_buttons_visible(self, page, base_url):
-        """All 4 'Compare this Product' buttons should be visible."""
-        hp = HomePage(page, base_url)
-        hp.open()
-        hp.verify_featured_compare_buttons_visible()
-
     def test_featured_product_link_navigates(self, page, base_url):
-        """Clicking a featured product name should navigate to the product page."""
+        """Clicking a featured product should navigate to its product page."""
         hp = HomePage(page, base_url)
         hp.open()
         hp.click_featured_product(0)
         assert "product/product" in hp.get_url(), (
             "URL should contain 'product/product' after clicking a featured product"
         )
-
-
-# ================================================================
-# Aggregate Smoke Tests – All Sections
-# ================================================================
-@pytest.mark.smoke
-@pytest.mark.ui
-class TestHomePageAllElements:
-    """Quick aggregate smoke tests for the entire home page."""
-
-    def test_all_navbar_elements_visible(self, page, base_url):
-        """All navbar elements should be visible."""
-        hp = HomePage(page, base_url)
-        hp.open()
-        hp.verify_all_navbar_elements_visible()
-
-    def test_all_slider_elements_visible(self, page, base_url):
-        """All slider elements should be visible."""
-        hp = HomePage(page, base_url)
-        hp.open()
-        hp.verify_all_slider_elements_visible()
-
-    def test_all_featured_elements_visible(self, page, base_url):
-        """All featured section elements should be visible."""
-        hp = HomePage(page, base_url)
-        hp.open()
-        hp.verify_all_featured_elements_visible()

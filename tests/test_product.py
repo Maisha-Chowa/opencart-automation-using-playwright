@@ -1,10 +1,18 @@
 """
 Test Suite: Product Page
-Covers visibility checks, data-driven tests from product_data.csv,
-and API response validation against the UI.
-"""
 
-import time
+Strategy: Test the *template* using one representative product (MacBook).
+If MacBook renders correctly, iPhone / Canon / Cinema use the same code.
+
+Exception: Featured products — one lightweight test per product to verify
+the query that pulls them isn't broken.
+
+Classes:
+  TestProductPageTemplate      — template structure & data (5 tests, MacBook)
+  TestFeaturedProductsIntegrity — each featured product loads correctly (4 tests)
+  TestProductServerResponse    — server HTML vs UI (5 tests, MacBook)
+Total: 14 tests
+"""
 
 import pytest
 from pages.product_page import ProductPage
@@ -14,133 +22,81 @@ from utilities.csv_reader import read_csv
 PRODUCT_CSV_DATA = read_csv("product_data.csv")
 
 
-# Set to 0 when  no longer need visual debugging.
-VISUAL_DELAY = 2
-
-
 # ================================================================
-# Visibility Tests (using MacBook product_id=43 as reference)
+# Template Tests (single product — MacBook, ID=43)
 # ================================================================
 @pytest.mark.ui
 @pytest.mark.regression
-class TestProductPageVisibility:
-    """Verify all product page elements are visible."""
+class TestProductPageTemplate:
+    """Verify product page template using one representative product (MacBook).
+
+    If the MacBook page works, the iPhone / Canon / Cinema pages work too
+    because they share the same underlying template code.
+    """
+
+    PRODUCT_ID = 43
 
     def test_all_product_info_visible(self, page, base_url):
-        """All product info elements should be visible."""
+        """All product info (name, price, brand, code, availability) should be visible."""
         pp = ProductPage(page, base_url)
-        pp.open(43)
+        pp.open(self.PRODUCT_ID)
         pp.verify_all_product_info_visible()
 
-    def test_product_name_visible(self, page, base_url):
-        """Product name heading should be visible."""
+    def test_product_images_section(self, page, base_url):
+        """Main image and thumbnail gallery should be present."""
         pp = ProductPage(page, base_url)
-        pp.open(43)
-        pp.verify_product_name_visible()
-
-    def test_product_price_visible(self, page, base_url):
-        """Product price should be visible."""
-        pp = ProductPage(page, base_url)
-        pp.open(43)
-        pp.verify_product_price_visible()
-
-    def test_product_ex_tax_visible(self, page, base_url):
-        """Ex-tax text should be visible."""
-        pp = ProductPage(page, base_url)
-        pp.open(43)
-        pp.verify_product_ex_tax_visible()
-
-    def test_brand_visible(self, page, base_url):
-        """Brand info should be visible."""
-        pp = ProductPage(page, base_url)
-        pp.open(43)
-        pp.verify_brand_visible()
-
-    def test_product_code_visible(self, page, base_url):
-        """Product code should be visible."""
-        pp = ProductPage(page, base_url)
-        pp.open(43)
-        pp.verify_product_code_visible()
-
-    def test_availability_visible(self, page, base_url):
-        """Availability info should be visible."""
-        pp = ProductPage(page, base_url)
-        pp.open(43)
-        pp.verify_availability_visible()
-
-    def test_main_image_visible(self, page, base_url):
-        """Main product image should be visible."""
-        pp = ProductPage(page, base_url)
-        pp.open(43)
+        pp.open(self.PRODUCT_ID)
         pp.verify_main_image_visible()
+        pp.verify_product_images_present(1)
 
-    def test_description_tab_visible(self, page, base_url):
-        """Description tab should be visible."""
+    def test_tab_structure(self, page, base_url):
+        """Description and Review tabs should be visible; content loads correctly."""
         pp = ProductPage(page, base_url)
-        pp.open(43)
+        pp.open(self.PRODUCT_ID)
         pp.verify_description_tab_visible()
-
-    def test_review_tab_visible(self, page, base_url):
-        """Reviews tab should be visible."""
-        pp = ProductPage(page, base_url)
-        pp.open(43)
         pp.verify_review_tab_visible()
-
-    def test_description_content_visible(self, page, base_url):
-        """Description tab content should be visible by default."""
-        pp = ProductPage(page, base_url)
-        pp.open(43)
         pp.verify_description_content_visible()
 
-    def test_all_action_buttons_visible(self, page, base_url):
-        """Add to Cart, quantity, wishlist, and compare should be visible."""
+    def test_action_buttons_visible(self, page, base_url):
+        """Add to Cart, quantity, wishlist, and compare buttons should be visible."""
         pp = ProductPage(page, base_url)
-        pp.open(43)
+        pp.open(self.PRODUCT_ID)
         pp.verify_all_action_buttons_visible()
 
-    def test_add_to_cart_button_visible(self, page, base_url):
-        """Add to Cart button should be visible."""
+    def test_product_data_renders_correctly(self, page, base_url):
+        """Product data should render correctly for the representative product."""
         pp = ProductPage(page, base_url)
-        pp.open(43)
-        pp.verify_add_to_cart_button_visible()
+        pp.open(self.PRODUCT_ID)
 
-    def test_quantity_input_visible(self, page, base_url):
-        """Quantity input should be visible."""
-        pp = ProductPage(page, base_url)
-        pp.open(43)
-        pp.verify_quantity_input_visible()
-
-    def test_wishlist_button_visible(self, page, base_url):
-        """Wishlist button should be visible."""
-        pp = ProductPage(page, base_url)
-        pp.open(43)
-        pp.verify_wishlist_button_visible()
-
-    def test_compare_button_visible(self, page, base_url):
-        """Compare button should be visible."""
-        pp = ProductPage(page, base_url)
-        pp.open(43)
-        pp.verify_compare_button_visible()
+        assert pp.get_product_name() == "MacBook"
+        assert pp.get_product_price() == "$602.00"
+        assert pp.get_product_ex_tax() == "Ex Tax: $500.00"
+        assert pp.get_brand() == "Apple"
+        assert pp.get_product_code() == "Product 16"
+        assert pp.get_availability() == "In Stock"
 
 
 # ================================================================
-# Data-Driven Tests (all values from product_data.csv)
+# Featured Products Integrity (the exception)
 # ================================================================
 @pytest.mark.ui
 @pytest.mark.regression
-class TestProductDataDriven:
-    """Data-driven product tests — every product is defined in product_data.csv."""
+class TestFeaturedProductsIntegrity:
+    """Verify each featured product page loads — ensures the query works.
+
+    This is the exception to 'test one product': we check that all 4
+    featured products resolve to valid, loadable pages with correct names.
+    """
 
     @pytest.mark.parametrize(
         "row",
         PRODUCT_CSV_DATA,
         ids=[row["test_id"] for row in PRODUCT_CSV_DATA],
     )
-    def test_product_name_matches_csv(self, page, base_url, row):
-        """Product name on the page should match CSV data."""
+    def test_featured_product_page_loads_with_correct_name(self, page, base_url, row):
+        """Each featured product should load and display its correct name."""
         pp = ProductPage(page, base_url)
         pp.open(int(row["product_id"]))
-        time.sleep(VISUAL_DELAY)
 
         actual_name = pp.get_product_name()
         assert actual_name == row["name"], (
@@ -148,137 +104,9 @@ class TestProductDataDriven:
             f"got '{actual_name}'"
         )
 
-    @pytest.mark.parametrize(
-        "row",
-        PRODUCT_CSV_DATA,
-        ids=[row["test_id"] for row in PRODUCT_CSV_DATA],
-    )
-    def test_product_price_matches_csv(self, page, base_url, row):
-        """Product price on the page should match CSV data."""
-        pp = ProductPage(page, base_url)
-        pp.open(int(row["product_id"]))
-
-        actual_price = pp.get_product_price()
-        assert actual_price == row["price"], (
-            f"[{row['test_id']}] Expected price '{row['price']}', "
-            f"got '{actual_price}'"
-        )
-
-    @pytest.mark.parametrize(
-        "row",
-        PRODUCT_CSV_DATA,
-        ids=[row["test_id"] for row in PRODUCT_CSV_DATA],
-    )
-    def test_product_ex_tax_matches_csv(self, page, base_url, row):
-        """Product ex-tax on the page should match CSV data."""
-        pp = ProductPage(page, base_url)
-        pp.open(int(row["product_id"]))
-
-        actual_tax = pp.get_product_ex_tax()
-        assert actual_tax == row["ex_tax"], (
-            f"[{row['test_id']}] Expected ex-tax '{row['ex_tax']}', "
-            f"got '{actual_tax}'"
-        )
-
-    @pytest.mark.parametrize(
-        "row",
-        PRODUCT_CSV_DATA,
-        ids=[row["test_id"] for row in PRODUCT_CSV_DATA],
-    )
-    def test_product_brand_matches_csv(self, page, base_url, row):
-        """Product brand on the page should match CSV data."""
-        pp = ProductPage(page, base_url)
-        pp.open(int(row["product_id"]))
-
-        actual_brand = pp.get_brand()
-        assert actual_brand == row["brand"], (
-            f"[{row['test_id']}] Expected brand '{row['brand']}', "
-            f"got '{actual_brand}'"
-        )
-
-    @pytest.mark.parametrize(
-        "row",
-        PRODUCT_CSV_DATA,
-        ids=[row["test_id"] for row in PRODUCT_CSV_DATA],
-    )
-    def test_product_code_matches_csv(self, page, base_url, row):
-        """Product code on the page should match CSV data."""
-        pp = ProductPage(page, base_url)
-        pp.open(int(row["product_id"]))
-
-        actual_code = pp.get_product_code()
-        assert actual_code == row["product_code"], (
-            f"[{row['test_id']}] Expected code '{row['product_code']}', "
-            f"got '{actual_code}'"
-        )
-
-    @pytest.mark.parametrize(
-        "row",
-        PRODUCT_CSV_DATA,
-        ids=[row["test_id"] for row in PRODUCT_CSV_DATA],
-    )
-    def test_product_availability_matches_csv(self, page, base_url, row):
-        """Product availability on the page should match CSV data."""
-        pp = ProductPage(page, base_url)
-        pp.open(int(row["product_id"]))
-
-        actual_avail = pp.get_availability()
-        assert actual_avail == row["availability"], (
-            f"[{row['test_id']}] Expected availability '{row['availability']}', "
-            f"got '{actual_avail}'"
-        )
-
-    @pytest.mark.parametrize(
-        "row",
-        PRODUCT_CSV_DATA,
-        ids=[row["test_id"] for row in PRODUCT_CSV_DATA],
-    )
-    def test_product_images_count(self, page, base_url, row):
-        """Product should have at least the expected number of images."""
-        pp = ProductPage(page, base_url)
-        pp.open(int(row["product_id"]))
-
-        min_images = int(row["min_images"])
-        pp.verify_product_images_present(min_images)
-
-    @pytest.mark.parametrize(
-        "row",
-        PRODUCT_CSV_DATA,
-        ids=[row["test_id"] for row in PRODUCT_CSV_DATA],
-    )
-    def test_product_description_contains(self, page, base_url, row):
-        """Product description should contain the expected text."""
-        pp = ProductPage(page, base_url)
-        pp.open(int(row["product_id"]))
-
-        if row["has_description"].lower() == "true":
-            desc = pp.get_description_text()
-            expected = row["description_contains"]
-            assert expected.lower() in desc.lower(), (
-                f"[{row['test_id']}] Description should contain "
-                f"'{expected}', got: '{desc[:100]}...'"
-            )
-
-    @pytest.mark.parametrize(
-        "row",
-        PRODUCT_CSV_DATA,
-        ids=[row["test_id"] for row in PRODUCT_CSV_DATA],
-    )
-    def test_product_specification_tab_presence(self, page, base_url, row):
-        """Specification tab should match expected presence from CSV."""
-        pp = ProductPage(page, base_url)
-        pp.open(int(row["product_id"]))
-
-        expected_has_spec = row["has_specification"].lower() == "true"
-        actual_has_spec = pp.has_specification_tab()
-        assert actual_has_spec == expected_has_spec, (
-            f"[{row['test_id']}] Specification tab expected={expected_has_spec}, "
-            f"actual={actual_has_spec}"
-        )
-
 
 # ================================================================
-# Server Response vs UI Tests (single product – MacBook, ID=43)
+# Server Response vs UI (single product — MacBook, ID=43)
 # ================================================================
 @pytest.mark.ui
 @pytest.mark.regression
