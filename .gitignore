@@ -27,6 +27,7 @@ reports/
 allure-results/
 allure-report/
 test-results/
+traces/
 *.html
 
 # Playwright
