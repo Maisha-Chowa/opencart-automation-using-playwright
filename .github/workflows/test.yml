@@ -126,19 +126,27 @@ jobs:
           echo ""
           echo "=== Install directory removed ==="
 
-          # Fix cookie path: the Docker image's session.php computes
-          #   path = dirname(PHP_SELF) . '/'
-          # When PHP_SELF is /index.php, dirname() returns "/" so path becomes "//".
-          # Patch it to always use "/" instead.
+          # ── PHP 8.1 compatibility patches for OpenCart 4.0.0.0 ──
+
+          # 1) Fix cookie path: session.php computes dirname(PHP_SELF).'/'
+          #    which yields "//" when PHP_SELF is /index.php.
           docker exec opencart-app sed -i "s|'path'.*dirname.*PHP_SELF.*|'path'     => '/',|" \
             /var/www/html/catalog/controller/startup/session.php
+
+          # 2) Fix TypeError: getCustomerGroup() expects int, gets string
+          #    from $this->config->get() which always returns string.
+          #    Remove strict int type hint so string '1' is accepted.
+          docker exec opencart-app sed -i \
+            's/getCustomerGroup(int \$customer_group_id)/getCustomerGroup(\$customer_group_id)/' \
+            /var/www/html/catalog/model/account/customer_group.php
 
           # Restart Apache to clear opcache
           docker exec opencart-app apache2ctl graceful 2>/dev/null || true
           sleep 2
 
-          echo "=== Session controller patched ==="
+          echo "=== Patches applied ==="
           docker exec opencart-app grep "'path'" /var/www/html/catalog/controller/startup/session.php
+          docker exec opencart-app grep "getCustomerGroup" /var/www/html/catalog/model/account/customer_group.php
 
       - name: Verify installation
         run: |
@@ -182,10 +190,11 @@ jobs:
             DELETE FROM oc_setting WHERE \`key\` IN ('captcha_page', 'config_captcha');
             UPDATE oc_setting SET \`value\` = '' WHERE \`key\` = 'config_mail_engine';
             UPDATE oc_setting SET \`value\` = '' WHERE \`key\` = 'config_mail_smtp_hostname';
+            UPDATE oc_setting SET \`value\` = '0' WHERE \`key\` = 'config_error_display';
           " 2>/dev/null || true
 
           docker exec opencart-app bash -c "rm -rf /var/www/html/system/storage/cache/*" 2>/dev/null || true
-          echo "CAPTCHA disabled, caches cleared."
+          echo "CAPTCHA disabled, error display off, caches cleared."
 
       - name: Smoke test (click Add to Cart, verify session)
         run: |
