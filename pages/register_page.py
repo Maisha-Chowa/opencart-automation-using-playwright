@@ -100,15 +100,14 @@ class RegisterPage(BasePage):
             "document.getElementById('form-register')?.setAttribute('novalidate', '')"
         )
 
-        self.page.get_by_role("button", name="Continue").click()
-
-        # Wait for the AJAX response before checking DOM for errors/redirect
+        # Click Continue and wait for the AJAX response + any JS redirect.
+        # Wrapped in try/except so we still check DOM state if AJAX never fires.
         try:
-            self.page.wait_for_response(
-                lambda r: "register" in r.url and r.status in range(200, 500),
-                timeout=10000,
-            )
-        except PwTimeout:
+            with self.page.expect_response(
+                lambda r: "register" in r.url, timeout=15000
+            ):
+                self.page.get_by_role("button", name="Continue").click()
+        except (PwTimeout, Exception):
             pass
         self.page.wait_for_load_state("networkidle")
 

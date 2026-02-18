@@ -27,7 +27,7 @@ class CartPage(BasePage):
 
     def open(self):
         """Navigate directly to the cart page."""
-        self.navigate(f"{self.base_url}/{self.CART_URL_PATH}")
+        self.navigate(f"{self.base_url}{self.CART_URL_PATH}")
 
     # ================================================================
     # Visibility checks: Cart Page Template

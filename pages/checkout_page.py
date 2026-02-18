@@ -33,11 +33,11 @@ class CheckoutPage(BasePage):
 
     def open(self):
         """Navigate to the checkout page."""
-        self.navigate(f"{self.base_url}/{self.CHECKOUT_URL_PATH}")
+        self.navigate(f"{self.base_url}{self.CHECKOUT_URL_PATH}")
 
     def open_cart(self):
         """Navigate to the cart page (for coupon/gift certificate tests)."""
-        self.navigate(f"{self.base_url}/{self.CART_URL_PATH}")
+        self.navigate(f"{self.base_url}{self.CART_URL_PATH}")
 
     # ================================================================
     # Visibility checks: Checkout Page Template
