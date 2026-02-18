@@ -204,30 +204,18 @@ class CartPage(BasePage):
         return data
 
     def update_quantity(self, qty: int, index: int = 0):
-        """Update the quantity for a cart row via Playwright's request API."""
+        """Update the quantity for a cart row via native browser form POST."""
         data = self._cart_form_data(index, quantity=qty)
         url = f"{self.base_url}index.php?route=checkout/cart|edit&language=en-gb"
-        json_resp = self._oc_post(url, data)
-
-        if json_resp.get("redirect"):
-            self.page.goto(json_resp["redirect"])
-        else:
-            reload_url = f"{self.base_url}index.php?route=checkout/cart|list&language=en-gb"
-            self._oc_reload_html(reload_url, "#shopping-cart")
-        self.page.wait_for_load_state("networkidle")
+        self._oc_data_post(url, data)
+        self.open()
 
     def remove_item(self, index: int = 0):
-        """Remove a product from the cart by index via Playwright's request API."""
+        """Remove a product from the cart by index via native browser form POST."""
         data = self._cart_form_data(index)
         url = f"{self.base_url}index.php?route=checkout/cart|remove&language=en-gb"
-        json_resp = self._oc_post(url, data)
-
-        if json_resp.get("redirect"):
-            self.page.goto(json_resp["redirect"])
-        else:
-            reload_url = f"{self.base_url}index.php?route=checkout/cart|list&language=en-gb"
-            self._oc_reload_html(reload_url, "#shopping-cart")
-        self.page.wait_for_load_state("networkidle")
+        self._oc_data_post(url, data)
+        self.open()
 
     def click_continue_shopping(self):
         """Click the Continue Shopping link."""

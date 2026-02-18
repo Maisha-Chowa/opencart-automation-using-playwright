@@ -92,10 +92,11 @@ jobs:
             WHERE pd.language_id=1 LIMIT 5;
           " 2>/dev/null || echo "Warning: Could not verify products"
 
-      - name: Verify OpenCart API is functional
+      - name: Verify OpenCart session works (smoke test)
         run: |
-          # Smoke test: load product page, add to cart, verify session works
+          # Smoke test: native form POST add-to-cart, then verify cart
           python3 -c "
+          import json
           from playwright.sync_api import sync_playwright
           with sync_playwright() as p:
               browser = p.chromium.launch(headless=True)
@@ -104,17 +105,23 @@ jobs:
               page.goto('http://localhost/index.php?route=product/product&language=en-gb&product_id=43')
               page.wait_for_load_state('networkidle')
               title = page.title()
-              data = page.evaluate('() => Object.fromEntries(new FormData(document.querySelector(\"#form-product\")))')
-              resp = page.request.post('http://localhost/index.php?route=checkout/cart|add&language=en-gb', form=data)
-              body = resp.json()
+              print(f'Page title: {title}')
+              with page.expect_navigation():
+                  page.evaluate('''() => {
+                      const form = document.getElementById(\"form-product\");
+                      form.action = \"/index.php?route=checkout/cart|add&language=en-gb\";
+                      form.method = \"POST\";
+                      form.submit();
+                  }''')
+              page.wait_for_load_state('networkidle')
+              body = json.loads(page.evaluate('() => document.body.innerText'))
+              print(f'Add-to-cart response: {body}')
               page.goto('http://localhost/index.php?route=checkout/cart&language=en-gb')
               page.wait_for_load_state('networkidle')
               names = page.evaluate('() => Array.from(document.querySelectorAll(\"#shopping-cart table tbody td:nth-child(2) a\")).map(e => e.textContent.trim())')
-              browser.close()
-              print(f'Page title: {title}')
-              print(f'Add-to-cart response: {body}')
               print(f'Cart products: {names}')
-              assert 'MacBook' in names, f'Smoke test failed: cart is empty after add-to-cart. Response was: {body}'
+              browser.close()
+              assert 'MacBook' in names, f'Smoke test FAILED: cart empty. Response: {body}'
               print('Smoke test PASSED')
           "
 

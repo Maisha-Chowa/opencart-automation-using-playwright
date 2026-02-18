@@ -254,20 +254,21 @@ class ProductPage(BasePage):
         self.page.locator("#input-quantity").fill(str(qty))
 
     def add_to_cart(self):
-        """Add the product to the cart via Playwright's request API.
+        """Add the product to the cart via native browser form POST.
 
-        Uses ``page.request.post()`` which shares the browser context's
-        session cookies, then injects the success alert and refreshes
-        the header cart widget.
+        Submits ``#form-product`` which triggers a real page navigation
+        (browser sends its own cookies), reads the JSON response, then
+        navigates back to the product page so the test can continue.
         """
-        url = f"{self.base_url}index.php?route=checkout/cart|add&language=en-gb"
-        data = self._read_form_data(self.page, "#form-product")
-        json_resp = self._oc_post(url, data)
-        self.page.evaluate(self._INJECT_ERRORS_JS, json_resp)
-        if json_resp.get("success"):
-            cart_url = f"{self.base_url}index.php?route=common/cart|info&language=en-gb"
-            self._oc_reload_html(cart_url, "#header-cart")
+        product_url = self.page.url
+        add_url = f"{self.base_url}index.php?route=checkout/cart|add&language=en-gb"
+        json_resp = self._oc_form_post("#form-product", url=add_url)
+
+        self.page.goto(product_url)
         self.page.wait_for_load_state("networkidle")
+
+        if isinstance(json_resp, dict):
+            self.page.evaluate(self._INJECT_RESPONSE_JS, json_resp)
 
     def add_to_wishlist(self):
         """Click the Add to Wish List button."""

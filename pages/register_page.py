@@ -81,10 +81,12 @@ class RegisterPage(BasePage):
         password: str,
         agree_privacy: bool = True,
     ):
-        """Fill out and submit the registration form via Playwright's request API.
+        """Fill out and submit the registration form via native browser POST.
 
-        Uses ``page.request.post()`` which shares the browser context's
-        session cookies, then injects errors/alerts back into the DOM.
+        The form already has an ``action`` URL (includes CSRF token).
+        After submission the browser navigates to the JSON response;
+        we parse it, then either follow the redirect (success) or
+        go back and inject the validation errors.
         """
         self.page.fill("#input-firstname", first_name)
         self.page.fill("#input-lastname", last_name)
@@ -94,10 +96,17 @@ class RegisterPage(BasePage):
         if agree_privacy:
             self.page.locator("input[name='agree']").check()
 
-        json_resp = self._oc_submit("#form-register")
+        register_url = self.page.url
+        json_resp = self._oc_form_post("#form-register")
 
-        if json_resp.get("redirect"):
+        if isinstance(json_resp, dict) and json_resp.get("redirect"):
             self.page.goto(json_resp["redirect"])
+        else:
+            self.page.goto(register_url)
+            self.page.wait_for_load_state("networkidle")
+            if isinstance(json_resp, dict):
+                self.page.evaluate(self._CLEAR_FORM_ERRORS_JS, "#form-register")
+                self.page.evaluate(self._INJECT_RESPONSE_JS, json_resp)
         self.page.wait_for_load_state("networkidle")
 
     def logout(self):

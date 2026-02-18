@@ -2,11 +2,14 @@
 BasePage - Common page actions and utilities shared across all page objects.
 
 Includes portable AJAX form-submission helpers that bypass OpenCart 4.x's
-``data-oc-toggle="ajax"`` / jQuery handlers.  In CI the OpenCart JavaScript
-framework sometimes fails to attach its event handlers, so every AJAX
-interaction uses Playwright's ``page.request`` API (which shares the
-browser context's cookie jar) instead of in-page ``fetch()``.
+``data-oc-toggle="ajax"`` / jQuery handlers.  In CI, both in-page
+``fetch()`` and Playwright's ``page.request`` API fail to share the PHP
+session cookie with the browser.  The only reliable mechanism is native
+browser form submission (``form.submit()``), which triggers a real page
+navigation and is guaranteed to send cookies.
 """
+
+import json as _json
 
 from playwright.sync_api import Page, expect
 
@@ -14,9 +17,9 @@ from playwright.sync_api import Page, expect
 class BasePage:
     """Base class for all page objects with common helper methods."""
 
-    # ── JS snippets for injecting server responses into the DOM ────
+    # ── JS snippets for DOM manipulation ──────────────────────────
 
-    _INJECT_ERRORS_JS = """(json) => {
+    _INJECT_RESPONSE_JS = """(json) => {
         document.querySelectorAll('#alert .alert').forEach(el => el.remove());
 
         const showAlert = (msg, cls) => {
@@ -53,68 +56,62 @@ class BasePage:
         form.querySelectorAll('.invalid-feedback').forEach(el => el.classList.remove('d-block'));
     }"""
 
-    _SET_INNER_HTML_JS = """([selector, html]) => {
-        const el = document.querySelector(selector);
-        if (el) el.innerHTML = html;
-    }"""
+    # ── Core helpers: native browser form POST ──────────────────
 
-    # ── Helpers ────────────────────────────────────────────────────
+    def _oc_form_post(self, form_selector: str, url: str | None = None) -> dict | list:
+        """Submit an existing DOM form via native browser POST.
 
-    @staticmethod
-    def _read_form_data(page: Page, form_selector: str) -> dict:
-        """Read all form field values as a dict via the browser DOM."""
-        return page.evaluate(
-            """(sel) => {
-                const form = document.querySelector(sel);
-                if (!form) return {};
-                return Object.fromEntries(new FormData(form));
-            }""",
-            form_selector,
-        )
-
-    @staticmethod
-    def _read_form_action(page: Page, form_selector: str) -> str:
-        """Read the form's ``action`` attribute."""
-        return page.evaluate(
-            """(sel) => {
-                const form = document.querySelector(sel);
-                return form ? form.action : '';
-            }""",
-            form_selector,
-        )
-
-    def _oc_reload_html(self, url: str, target_selector: str):
-        """GET HTML via Playwright's request API and inject it into a DOM element."""
-        resp = self.page.request.get(url)
-        self.page.evaluate(self._SET_INNER_HTML_JS, [target_selector, resp.text()])
-
-    def _oc_post(self, url: str, data: dict) -> dict:
-        """POST form data via Playwright's request API (shares session cookies).
-
-        Returns the parsed JSON response body.
+        This triggers a real page navigation so the browser's own cookie
+        handling is used — the only mechanism that works reliably in CI.
+        After reading the JSON body the caller must navigate back.
         """
-        resp = self.page.request.post(url, form=data)
-        return resp.json()
+        js = """([sel, overrideUrl]) => {
+            const form = document.querySelector(sel);
+            if (!form) return false;
+            if (overrideUrl) form.action = overrideUrl;
+            form.method = 'POST';
+            form.submit();
+            return true;
+        }"""
+        with self.page.expect_navigation(wait_until="networkidle"):
+            submitted = self.page.evaluate(js, [form_selector, url or ""])
+        if not submitted:
+            return {}
+        body = self.page.evaluate("() => document.body.innerText")
+        try:
+            return _json.loads(body)
+        except (ValueError, TypeError):
+            return {}
 
-    def _oc_submit(self, form_selector: str, *,
-                   url: str | None = None,
-                   extra_data: dict | None = None) -> dict:
-        """Read form data from the DOM, POST it, and inject the JSON
-        response (errors / success alerts) back into the page.
+    def _oc_data_post(self, url: str, data: dict) -> dict | list:
+        """POST arbitrary data via a temporary hidden browser form.
 
-        Returns the parsed JSON response (dict or list).
+        Creates a hidden ``<form>`` in the DOM, populates it, and submits.
+        Same session-cookie guarantee as ``_oc_form_post``.
         """
-        data = self._read_form_data(self.page, form_selector)
-        if extra_data:
-            data.update(extra_data)
-        post_url = url or self._read_form_action(self.page, form_selector)
-
-        self.page.evaluate(self._CLEAR_FORM_ERRORS_JS, form_selector)
-
-        json_resp = self._oc_post(post_url, data)
-        if isinstance(json_resp, dict):
-            self.page.evaluate(self._INJECT_ERRORS_JS, json_resp)
-        return json_resp
+        js = """([url, data]) => {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = url;
+            form.style.display = 'none';
+            for (const [name, value] of Object.entries(data)) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = name;
+                input.value = String(value);
+                form.appendChild(input);
+            }
+            document.body.appendChild(form);
+            form.submit();
+            return true;
+        }"""
+        with self.page.expect_navigation(wait_until="networkidle"):
+            self.page.evaluate(js, [url, data])
+        body = self.page.evaluate("() => document.body.innerText")
+        try:
+            return _json.loads(body)
+        except (ValueError, TypeError):
+            return {}
 
     # ── Standard page object methods ──────────────────────────────
 
