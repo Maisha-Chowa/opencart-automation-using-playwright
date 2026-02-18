@@ -102,7 +102,14 @@ class RegisterPage(BasePage):
 
         self.page.get_by_role("button", name="Continue").click()
 
-        # Wait for AJAX processing and any JS redirect
+        # Wait for the AJAX response before checking DOM for errors/redirect
+        try:
+            self.page.wait_for_response(
+                lambda r: "register" in r.url and r.status in range(200, 500),
+                timeout=10000,
+            )
+        except PwTimeout:
+            pass
         self.page.wait_for_load_state("networkidle")
 
     def logout(self):

@@ -73,11 +73,17 @@ jobs:
 
       - name: Configure OpenCart for testing
         run: |
-          # Disable CAPTCHA on registration/login/contact pages so form tests work
+          # Completely remove CAPTCHA extension and all related settings
           docker exec opencart-db mysql -uroot -popencart_password opencart -e "
+            DELETE FROM oc_extension WHERE \`type\` = 'captcha';
+            DELETE FROM oc_setting WHERE \`code\` LIKE '%captcha%';
             DELETE FROM oc_setting WHERE \`key\` IN ('captcha_page', 'config_captcha');
             UPDATE oc_setting SET \`value\` = '' WHERE \`key\` = 'config_mail_engine';
+            UPDATE oc_setting SET \`value\` = '' WHERE \`key\` = 'config_mail_smtp_hostname';
           " 2>/dev/null || true
+
+          # Clear OpenCart file caches so DB changes take effect immediately
+          docker exec opencart-app bash -c "rm -rf /var/www/html/system/storage/cache/*" 2>/dev/null || true
 
           # Verify DB has products (sanity check)
           docker exec opencart-db mysql -uroot -popencart_password opencart -e "
