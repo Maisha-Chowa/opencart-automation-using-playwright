@@ -31,48 +31,6 @@ class TestSearchPageVisibility:
         sp.open()
         sp.verify_all_search_form_elements_visible()
 
-    def test_search_heading_visible(self, page, base_url):
-        """'Search' heading should be visible."""
-        sp = SearchPage(page, base_url)
-        sp.open()
-        sp.verify_search_heading_visible()
-
-    def test_search_input_visible(self, page, base_url):
-        """Search keyword input should be visible."""
-        sp = SearchPage(page, base_url)
-        sp.open()
-        sp.verify_search_input_visible()
-
-    def test_search_button_visible(self, page, base_url):
-        """Search button should be visible."""
-        sp = SearchPage(page, base_url)
-        sp.open()
-        sp.verify_search_button_visible()
-
-    def test_search_criteria_label_visible(self, page, base_url):
-        """'Search Criteria' label should be visible."""
-        sp = SearchPage(page, base_url)
-        sp.open()
-        sp.verify_search_criteria_label_visible()
-
-    def test_description_checkbox_visible(self, page, base_url):
-        """'Search in product descriptions' checkbox should be visible."""
-        sp = SearchPage(page, base_url)
-        sp.open()
-        sp.verify_description_checkbox_visible()
-
-    def test_category_dropdown_visible(self, page, base_url):
-        """Category dropdown should be visible."""
-        sp = SearchPage(page, base_url)
-        sp.open()
-        sp.verify_category_dropdown_visible()
-
-    def test_subcategory_checkbox_visible(self, page, base_url):
-        """'Search in subcategories' checkbox should be visible."""
-        sp = SearchPage(page, base_url)
-        sp.open()
-        sp.verify_subcategory_checkbox_visible()
-
     def test_result_controls_visible_when_results_exist(self, page, base_url):
         """Sort, Limit, Grid, and List controls should be visible when results exist."""
         sp = SearchPage(page, base_url)

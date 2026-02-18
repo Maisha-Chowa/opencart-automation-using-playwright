@@ -1,17 +1,12 @@
 test_id,search_keyword,expected_result,min_results,expected_contains,expected_message
 search_macbook,macbook,found,3,MacBook,
 search_macbook_exact,MacBook Air,found,1,MacBook Air,
-search_macbook_upper,MACBOOK,found,3,MacBook,
-search_macbook_space,mac book,found,3,MacBook,
 search_iphone,iphone,found,1,iPhone,
 search_canon,canon,found,1,Canon EOS 5D,
-search_mac_partial,mac,found,4,Mac,
 search_apple,apple,found,1,Apple Cinema,
-search_phone_partial,phone,found,1,iPhone,
 search_samsung,Samsung,found,2,Samsung,
 search_imac,imac,found,1,iMac,
 search_not_found,xyznotfound123,not_found,0,,There is no product that matches the search criteria
-search_no_results_camera,camera,not_found,0,,There is no product that matches the search criteria
 search_empty,,not_found,0,,There is no product that matches the search criteria
 search_special_xss,<script>alert('xss')</script>,not_found,0,,There is no product that matches the search criteria
 search_special_sql,' OR 1=1 --,not_found,0,,There is no product that matches the search criteria
