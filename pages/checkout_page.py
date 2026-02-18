@@ -175,12 +175,24 @@ class CheckoutPage(BasePage):
         return ""
 
     def has_success_alert(self) -> bool:
-        """Check if a success alert is visible."""
-        return self.page.locator(".alert-success").count() > 0
+        """Check if a success alert is visible (waits briefly for AJAX)."""
+        try:
+            self.page.locator(".alert-success").first.wait_for(
+                state="visible", timeout=5000
+            )
+            return True
+        except Exception:
+            return False
 
     def has_danger_alert(self) -> bool:
-        """Check if a danger alert is visible."""
-        return self.page.locator(".alert-danger").count() > 0
+        """Check if a danger alert is visible (waits briefly for AJAX)."""
+        try:
+            self.page.locator(".alert-danger").first.wait_for(
+                state="visible", timeout=5000
+            )
+            return True
+        except Exception:
+            return False
 
     # ================================================================
     # Checkout actions

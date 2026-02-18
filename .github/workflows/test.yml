@@ -137,7 +137,7 @@ jobs:
           #    from $this->config->get() which always returns string.
           #    Remove strict int type hint so string '1' is accepted.
           docker exec opencart-app sed -i \
-            's/getCustomerGroup(int \$customer_group_id)/getCustomerGroup(\$customer_group_id)/' \
+            's/getCustomerGroup(int $customer_group_id)/getCustomerGroup($customer_group_id)/' \
             /var/www/html/catalog/model/account/customer_group.php
 
           # Restart Apache to clear opcache
@@ -190,20 +190,22 @@ jobs:
             DELETE FROM oc_setting WHERE \`key\` IN ('captcha_page', 'config_captcha');
             UPDATE oc_setting SET \`value\` = '' WHERE \`key\` = 'config_mail_engine';
             UPDATE oc_setting SET \`value\` = '' WHERE \`key\` = 'config_mail_smtp_hostname';
-            UPDATE oc_setting SET \`value\` = '0' WHERE \`key\` = 'config_error_display';
           " 2>/dev/null || true
 
           docker exec opencart-app bash -c "rm -rf /var/www/html/system/storage/cache/*" 2>/dev/null || true
-          echo "CAPTCHA disabled, error display off, caches cleared."
+          echo "CAPTCHA disabled, caches cleared."
 
       - name: Smoke test (click Add to Cart, verify session)
+        env:
+          BROWSER: ${{ matrix.browser }}
         run: |
           python3 << 'PYEOF'
-          import sys
+          import os, sys
           from playwright.sync_api import sync_playwright
 
           with sync_playwright() as p:
-              browser = p.chromium.launch(headless=True)
+              browser_name = os.environ.get("BROWSER", "chromium")
+              browser = getattr(p, browser_name).launch(headless=True)
               ctx = browser.new_context()
               page = ctx.new_page()
 
@@ -299,7 +301,7 @@ jobs:
           path: gh-pages
 
       - name: Build Allure report with history
-        uses: simple-elf/allure-report-action@v1.9
+        uses: simple-elf/allure-report-action@v1.13
         with:
           gh_pages: gh-pages
           allure_history: allure-history
