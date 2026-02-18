@@ -118,3 +118,30 @@ def pytest_runtest_makereport(item, call):
 
     if report.when == "call":
         item.rep_call = report
+
+
+# ============================================================
+# Test Ordering
+# ============================================================
+
+_MODULE_ORDER = [
+    "test_home_page",
+    "test_register",
+    "test_login",
+    "test_search",
+    "test_product",
+    "test_cart",
+    "test_checkout",
+]
+
+
+def pytest_collection_modifyitems(items):
+    """Run test modules in logical order rather than alphabetical."""
+    def _sort_key(item):
+        module = item.module.__name__.rsplit(".", 1)[-1]
+        try:
+            return _MODULE_ORDER.index(module)
+        except ValueError:
+            return len(_MODULE_ORDER)
+
+    items.sort(key=_sort_key)

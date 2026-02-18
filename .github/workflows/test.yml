@@ -36,44 +36,132 @@ jobs:
       - name: Start OpenCart with Docker Compose
         run: docker compose up -d
 
-      - name: Wait for OpenCart to be ready
+      - name: Wait for OpenCart container to respond
         run: |
-          echo "Waiting for OpenCart to initialize..."
+          echo "Waiting for OpenCart web server..."
           for i in $(seq 1 60); do
-            if curl -s -o /dev/null -w "%{http_code}" http://localhost | grep -q "200\|302"; then
-              echo "OpenCart is responding (attempt $i)"
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost 2>/dev/null || echo "000")
+            if [ "$HTTP_CODE" != "000" ]; then
+              echo "Web server responding with HTTP $HTTP_CODE (attempt $i)"
               break
             fi
             echo "Waiting... (attempt $i/60)"
             sleep 5
           done
 
-      - name: Run OpenCart installer
+      - name: Wait for database to accept connections
         run: |
-          # Complete the OpenCart installation automatically
-          curl -sL -X POST "http://localhost/install/index.php?route=install/step_3&language=en-gb" \
-            -d "db_driver=mysqli" \
-            -d "db_hostname=database" \
-            -d "db_username=root" \
-            -d "db_password=opencart_password" \
-            -d "db_database=opencart" \
-            -d "db_prefix=oc_" \
-            -d "db_port=3306" \
-            -d "username=admin" \
-            -d "password=admin123" \
-            -d "email=admin@example.com" \
-            -o /dev/null -w "Install HTTP status: %{http_code}\n"
+          echo "Waiting for MySQL to be ready..."
+          for i in $(seq 1 30); do
+            if docker exec opencart-db mysqladmin ping -uroot -popencart_password --silent 2>/dev/null; then
+              echo "MySQL is ready (attempt $i)"
+              break
+            fi
+            echo "Waiting for MySQL... (attempt $i/30)"
+            sleep 5
+          done
 
-          # Remove the install directory
+      - name: Install OpenCart
+        run: |
+          echo "=== Container web root ==="
+          docker exec opencart-app ls /var/www/html/
+
+          echo ""
+          echo "=== Install directory ==="
+          docker exec opencart-app ls /var/www/html/install/ 2>/dev/null || echo "(install dir not found)"
+
+          # ── Method 1: CLI installer (most reliable) ──
+          echo ""
+          echo "=== Attempting CLI installer ==="
+          docker exec opencart-app php /var/www/html/install/cli_install.php install \
+            --db_driver mysqli \
+            --db_hostname database \
+            --db_username root \
+            --db_password opencart_password \
+            --db_database opencart \
+            --db_prefix oc_ \
+            --db_port 3306 \
+            --username admin \
+            --password admin123 \
+            --email admin@example.com \
+            --http_server http://localhost/ 2>&1 \
+          && echo "CLI installer succeeded" \
+          || {
+            echo "CLI installer failed or not available, trying web installer..."
+
+            # ── Method 2: Web installer with cookie jar (preserves session across steps) ──
+            echo "Step 1: License..."
+            curl -sL -c /tmp/oc_cookies -b /tmp/oc_cookies \
+              "http://localhost/install/index.php?route=install/step_1&language=en-gb" -o /dev/null
+
+            echo "Step 2: Pre-installation check..."
+            curl -sL -c /tmp/oc_cookies -b /tmp/oc_cookies \
+              "http://localhost/install/index.php?route=install/step_2&language=en-gb" -o /dev/null
+
+            echo "Step 3: Database configuration..."
+            INSTALL_RESP=$(curl -sL -c /tmp/oc_cookies -b /tmp/oc_cookies \
+              -X POST "http://localhost/install/index.php?route=install/step_3&language=en-gb" \
+              -d "db_driver=mysqli" \
+              -d "db_hostname=database" \
+              -d "db_username=root" \
+              -d "db_password=opencart_password" \
+              -d "db_database=opencart" \
+              -d "db_prefix=oc_" \
+              -d "db_port=3306" \
+              -d "username=admin" \
+              -d "password=admin123" \
+              -d "email=admin@example.com" \
+              -w "\nHTTP_STATUS:%{http_code}")
+            echo "Installer response (last 300 chars):"
+            echo "$INSTALL_RESP" | tail -c 300
+            echo ""
+
+            # Step 4 (finish) — some OC versions need this
+            curl -sL -c /tmp/oc_cookies -b /tmp/oc_cookies \
+              "http://localhost/install/index.php?route=install/step_4&language=en-gb" -o /dev/null 2>/dev/null || true
+          }
+
+          # Remove install directory
           docker exec opencart-app rm -rf /var/www/html/install
+          echo ""
+          echo "=== Install directory removed ==="
 
-          # Verify storefront is accessible
-          echo "Verifying storefront..."
-          curl -sL http://localhost | grep -q "<title>" && echo "Storefront is ready!" || echo "Warning: Storefront may not be ready"
+      - name: Verify installation
+        run: |
+          # Check storefront loads
+          echo "=== Storefront check ==="
+          STORE_TITLE=$(curl -sL http://localhost | grep -oP '<title>\K[^<]+' || echo "FAILED")
+          echo "Storefront title: $STORE_TITLE"
+
+          # Check a product page loads
+          echo "=== Product page check ==="
+          PRODUCT_TITLE=$(curl -sL "http://localhost/index.php?route=product/product&language=en-gb&product_id=43" | grep -oP '<title>\K[^<]+' || echo "FAILED")
+          echo "Product page title: $PRODUCT_TITLE"
+
+          # Check database has products
+          echo "=== Database products ==="
+          docker exec opencart-db mysql -uroot -popencart_password opencart -e "
+            SELECT product_id, pd.name FROM oc_product p
+            JOIN oc_product_description pd USING(product_id)
+            WHERE pd.language_id=1 LIMIT 5;
+          " 2>/dev/null || echo "Warning: Could not query products"
+
+          # Check the config.php was created
+          echo "=== Config file ==="
+          docker exec opencart-app test -f /var/www/html/config.php && echo "config.php exists" || echo "config.php MISSING"
+          docker exec opencart-app head -5 /var/www/html/config.php 2>/dev/null || true
+
+          # Fail fast if product page returns 404
+          if [ "$PRODUCT_TITLE" = "404 Not Found" ] || [ "$PRODUCT_TITLE" = "FAILED" ]; then
+            echo ""
+            echo "FATAL: OpenCart installation failed — product page not accessible."
+            echo "Dumping container logs for debugging:"
+            docker logs opencart-app 2>&1 | tail -50
+            exit 1
+          fi
 
       - name: Configure OpenCart for testing
         run: |
-          # Completely remove CAPTCHA extension and all related settings
           docker exec opencart-db mysql -uroot -popencart_password opencart -e "
             DELETE FROM oc_extension WHERE \`type\` = 'captcha';
             DELETE FROM oc_setting WHERE \`code\` LIKE '%captcha%';
@@ -82,48 +170,51 @@ jobs:
             UPDATE oc_setting SET \`value\` = '' WHERE \`key\` = 'config_mail_smtp_hostname';
           " 2>/dev/null || true
 
-          # Clear OpenCart file caches so DB changes take effect immediately
           docker exec opencart-app bash -c "rm -rf /var/www/html/system/storage/cache/*" 2>/dev/null || true
+          echo "CAPTCHA disabled, caches cleared."
 
-          # Verify DB has products (sanity check)
-          docker exec opencart-db mysql -uroot -popencart_password opencart -e "
-            SELECT product_id, pd.name FROM oc_product p
-            JOIN oc_product_description pd USING(product_id)
-            WHERE pd.language_id=1 LIMIT 5;
-          " 2>/dev/null || echo "Warning: Could not verify products"
-
-      - name: Verify OpenCart session works (smoke test)
+      - name: Smoke test (add to cart via native form POST)
         run: |
-          # Smoke test: native form POST add-to-cart, then verify cart
-          python3 -c "
-          import json
+          python3 << 'PYEOF'
+          import json, sys
           from playwright.sync_api import sync_playwright
+
           with sync_playwright() as p:
               browser = p.chromium.launch(headless=True)
-              ctx = browser.new_context()
-              page = ctx.new_page()
-              page.goto('http://localhost/index.php?route=product/product&language=en-gb&product_id=43')
-              page.wait_for_load_state('networkidle')
+              page = browser.new_context().new_page()
+
+              page.goto("http://localhost/index.php?route=product/product&language=en-gb&product_id=43")
+              page.wait_for_load_state("networkidle")
               title = page.title()
-              print(f'Page title: {title}')
+              print(f"Product page title: {title}")
+
+              if "404" in title or "Not Found" in title:
+                  print("SKIP: Product page returned 404 — installation issue")
+                  browser.close()
+                  sys.exit(1)
+
               with page.expect_navigation():
-                  page.evaluate('''() => {
-                      const form = document.getElementById(\"form-product\");
-                      form.action = \"/index.php?route=checkout/cart|add&language=en-gb\";
-                      form.method = \"POST\";
+                  page.evaluate("""() => {
+                      const form = document.getElementById("form-product");
+                      form.action = "/index.php?route=checkout/cart|add&language=en-gb";
+                      form.method = "POST";
                       form.submit();
-                  }''')
-              page.wait_for_load_state('networkidle')
-              body = json.loads(page.evaluate('() => document.body.innerText'))
-              print(f'Add-to-cart response: {body}')
-              page.goto('http://localhost/index.php?route=checkout/cart&language=en-gb')
-              page.wait_for_load_state('networkidle')
-              names = page.evaluate('() => Array.from(document.querySelectorAll(\"#shopping-cart table tbody td:nth-child(2) a\")).map(e => e.textContent.trim())')
-              print(f'Cart products: {names}')
+                  }""")
+              page.wait_for_load_state("networkidle")
+              body = json.loads(page.evaluate("() => document.body.innerText"))
+              print(f"Add-to-cart response: {body}")
+
+              page.goto("http://localhost/index.php?route=checkout/cart&language=en-gb")
+              page.wait_for_load_state("networkidle")
+              names = page.evaluate("""() => Array.from(
+                  document.querySelectorAll("#shopping-cart table tbody td:nth-child(2) a")
+              ).map(e => e.textContent.trim())""")
+              print(f"Cart products: {names}")
               browser.close()
-              assert 'MacBook' in names, f'Smoke test FAILED: cart empty. Response: {body}'
-              print('Smoke test PASSED')
-          "
+
+              assert "MacBook" in names, f"Smoke test FAILED: cart empty. Response: {body}"
+              print("Smoke test PASSED")
+          PYEOF
 
       - name: Run Playwright tests
         run: pytest --browser ${{ matrix.browser }} -m "not admin"
