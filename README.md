@@ -6,7 +6,7 @@ A production-grade QA automation framework for the **OpenCart 4.0** e-commerce p
 
 ## Test Results
 
-**114 tests | 100% pass rate | 7 test suites | ~7 min execution time**
+**102 tests | 100% pass rate | 7 test suites | ~7 min execution time**
 
 ### Allure Report Overview
 
@@ -24,7 +24,7 @@ A production-grade QA automation framework for the **OpenCart 4.0** e-commerce p
 | **Login** | 19 | Form visibility, data-driven valid/invalid credentials |
 | **Product** | 14 | Template structure, featured products integrity, server response validation |
 | **Register** | 18 | Form visibility, data-driven registration scenarios |
-| **Search** | 30 | Form elements, data-driven keyword search, result interactions |
+| **Search** | 18 | Form elements, data-driven keyword search, result interactions |
 
 ---
 
@@ -77,9 +77,9 @@ opencart-automation-using-playwright/
 │   ├── login_page.py               #   User login page
 │   └── register_page.py            #   User registration page
 │
-├── tests/                          # Test suites (114 tests)
+├── tests/                          # Test suites (102 tests)
 │   ├── test_home_page.py           #   Home page template tests (9)
-│   ├── test_search.py              #   Search functionality (30)
+│   ├── test_search.py              #   Search functionality (18)
 │   ├── test_product.py             #   Product page + server response (14)
 │   ├── test_cart.py                #   Shopping cart flows (10)
 │   ├── test_checkout.py            #   Checkout + coupon/gift (14)
@@ -87,7 +87,7 @@ opencart-automation-using-playwright/
 │   └── test_register.py            #   Registration data-driven (18)
 │
 ├── testdata/                       # CSV test data files
-│   ├── search_data.csv             #   15 search keyword combinations
+│   ├── search_data.csv             #   12 search keyword combinations
 │   ├── product_data.csv            #   4 featured product datasets
 │   ├── cart_data.csv               #   2 cart-eligible products
 │   ├── checkout_data.csv           #   5 guest checkout scenarios
@@ -195,7 +195,7 @@ Verify: open http://localhost in your browser.
 ### 3. Run Tests
 
 ```bash
-# Run all 114 tests
+# Run all 102 tests
 pytest
 
 # Run by marker
