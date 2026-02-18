@@ -1,10 +1,11 @@
 """
 BasePage - Common page actions and utilities shared across all page objects.
 
-Includes a portable AJAX form-submission helper that bypasses OpenCart 4.x's
+Includes portable AJAX form-submission helpers that bypass OpenCart 4.x's
 ``data-oc-toggle="ajax"`` / jQuery handlers.  In CI the OpenCart JavaScript
 framework sometimes fails to attach its event handlers, so every AJAX
-interaction is done via the browser Fetch API instead.
+interaction uses Playwright's ``page.request`` API (which shares the
+browser context's cookie jar) instead of in-page ``fetch()``.
 """
 
 from playwright.sync_api import Page, expect
@@ -13,55 +14,27 @@ from playwright.sync_api import Page, expect
 class BasePage:
     """Base class for all page objects with common helper methods."""
 
-    # JS executed inside page.evaluate().  Accepts an options dict:
-    #   formSelector  – CSS selector for the <form>
-    #   url           – (optional) override POST URL; defaults to form.action
-    #   extraData     – (optional) dict of extra key/value pairs to append
-    #   reload        – (optional) {url, target} to fetch HTML and inject
-    _OC_SUBMIT_JS = """async (opts) => {
-        const form = document.querySelector(opts.formSelector);
-        if (!form) return {ok: false, reason: 'form not found'};
+    # ── JS snippets for injecting server responses into the DOM ────
 
-        const fd = new URLSearchParams(new FormData(form));
-        if (opts.extraData) {
-            for (const [k, v] of Object.entries(opts.extraData)) fd.set(k, v);
-        }
-
-        const resp = await fetch(opts.url || form.action, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded',
-                       'X-Requested-With': 'XMLHttpRequest'},
-            body: fd
-        });
-        const json = await resp.json();
-
-        // ── Clear previous state ──
-        form.querySelectorAll('.is-invalid').forEach(
-            el => el.classList.remove('is-invalid'));
-        form.querySelectorAll('.invalid-feedback').forEach(
-            el => el.classList.remove('d-block'));
+    _INJECT_ERRORS_JS = """(json) => {
         document.querySelectorAll('#alert .alert').forEach(el => el.remove());
 
-        // ── Errors ──
-        if (json.error) {
-            const showAlert = (msg) => {
-                let box = document.getElementById('alert');
-                if (!box) {
-                    box = document.createElement('div');
-                    box.id = 'alert';
-                    (document.getElementById('content') || document.body)
-                        .prepend(box);
-                }
-                box.innerHTML +=
-                    '<div class="alert alert-danger alert-dismissible">'
-                    + msg + '</div>';
-            };
+        const showAlert = (msg, cls) => {
+            let box = document.getElementById('alert');
+            if (!box) {
+                box = document.createElement('div');
+                box.id = 'alert';
+                (document.getElementById('content') || document.body).prepend(box);
+            }
+            box.innerHTML += '<div class="alert ' + cls + ' alert-dismissible">' + msg + '</div>';
+        };
 
+        if (json.error) {
             if (typeof json.error === 'string') {
-                showAlert(json.error);
+                showAlert(json.error, 'alert-danger');
             } else {
                 for (const [key, msg] of Object.entries(json.error)) {
-                    if (key === 'warning') { showAlert(msg); continue; }
+                    if (key === 'warning') { showAlert(msg, 'alert-danger'); continue; }
                     const dashKey = key.replaceAll('_', '-');
                     const el = document.getElementById('error-' + dashKey);
                     if (el) { el.classList.add('d-block'); el.textContent = msg; }
@@ -70,47 +43,77 @@ class BasePage:
                 }
             }
         }
-
-        // ── Success alert ──
-        if (json.success) {
-            let box = document.getElementById('alert');
-            if (!box) {
-                box = document.createElement('div');
-                box.id = 'alert';
-                (document.getElementById('content') || document.body)
-                    .prepend(box);
-            }
-            box.innerHTML =
-                '<div class="alert alert-success alert-dismissible">'
-                + json.success + '</div>';
-        }
-
-        // ── Reload a target element (mirrors data-oc-load / data-oc-target) ──
-        if (opts.reload) {
-            const html = await (await fetch(opts.reload.url)).text();
-            const tgt = document.querySelector(opts.reload.target);
-            if (tgt) tgt.innerHTML = html;
-        }
-
-        return {ok: true, json: json, redirect: json.redirect || null};
+        if (json.success) showAlert(json.success, 'alert-success');
     }"""
+
+    _CLEAR_FORM_ERRORS_JS = """(sel) => {
+        const form = document.querySelector(sel);
+        if (!form) return;
+        form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+        form.querySelectorAll('.invalid-feedback').forEach(el => el.classList.remove('d-block'));
+    }"""
+
+    _RELOAD_HTML_JS = """async (opts) => {
+        const resp = await fetch(opts.url);
+        const html = await resp.text();
+        const tgt = document.querySelector(opts.target);
+        if (tgt) tgt.innerHTML = html;
+    }"""
+
+    # ── Helpers ────────────────────────────────────────────────────
+
+    @staticmethod
+    def _read_form_data(page: Page, form_selector: str) -> dict:
+        """Read all form field values as a dict via the browser DOM."""
+        return page.evaluate(
+            """(sel) => {
+                const form = document.querySelector(sel);
+                if (!form) return {};
+                return Object.fromEntries(new FormData(form));
+            }""",
+            form_selector,
+        )
+
+    @staticmethod
+    def _read_form_action(page: Page, form_selector: str) -> str:
+        """Read the form's ``action`` attribute."""
+        return page.evaluate(
+            """(sel) => {
+                const form = document.querySelector(sel);
+                return form ? form.action : '';
+            }""",
+            form_selector,
+        )
+
+    def _oc_post(self, url: str, data: dict) -> dict:
+        """POST form data via Playwright's request API (shares session cookies).
+
+        Returns the parsed JSON response body.
+        """
+        resp = self.page.request.post(url, form=data)
+        return resp.json()
 
     def _oc_submit(self, form_selector: str, *,
                    url: str | None = None,
-                   extra_data: dict | None = None,
-                   reload: dict | None = None) -> dict:
-        """Submit an OpenCart AJAX form via the Fetch API.
+                   extra_data: dict | None = None) -> dict:
+        """Read form data from the DOM, POST it, and inject the JSON
+        response (errors / success alerts) back into the page.
 
-        Returns the parsed JSON response dict (wrapped in ``{ok, json, redirect}``).
+        Returns the parsed JSON response (dict or list).
         """
-        opts: dict = {"formSelector": form_selector}
-        if url:
-            opts["url"] = url
+        data = self._read_form_data(self.page, form_selector)
         if extra_data:
-            opts["extraData"] = extra_data
-        if reload:
-            opts["reload"] = reload
-        return self.page.evaluate(self._OC_SUBMIT_JS, opts) or {}
+            data.update(extra_data)
+        post_url = url or self._read_form_action(self.page, form_selector)
+
+        self.page.evaluate(self._CLEAR_FORM_ERRORS_JS, form_selector)
+
+        json_resp = self._oc_post(post_url, data)
+        if isinstance(json_resp, dict):
+            self.page.evaluate(self._INJECT_ERRORS_JS, json_resp)
+        return json_resp
+
+    # ── Standard page object methods ──────────────────────────────
 
     def __init__(self, page: Page):
         self.page = page

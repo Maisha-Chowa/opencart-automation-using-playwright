@@ -186,56 +186,53 @@ class CartPage(BasePage):
     # Cart actions
     # ================================================================
 
-    _CART_ACTION_JS = """async (opts) => {
-        const forms = document.querySelectorAll('#shopping-cart form');
-        const form = forms[opts.index];
-        if (!form) return {ok: false, reason: 'form not found at index ' + opts.index};
-
-        if (opts.quantity !== undefined) {
-            const qtyInput = form.querySelector('input[name="quantity"]');
-            if (qtyInput) qtyInput.value = String(opts.quantity);
-        }
-
-        const fd = new URLSearchParams(new FormData(form));
-        const resp = await fetch(opts.url, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded',
-                       'X-Requested-With': 'XMLHttpRequest'},
-            body: fd
-        });
-        const json = await resp.json();
-
-        if (json.redirect) return {ok: true, json: json, redirect: json.redirect};
-
-        // Reload the cart list (mirrors data-oc-load / data-oc-target)
-        const html = await (await fetch(opts.reloadUrl)).text();
-        const tgt = document.querySelector('#shopping-cart');
-        if (tgt) tgt.innerHTML = html;
-
-        return {ok: true, json: json};
-    }"""
+    def _cart_form_data(self, index: int = 0, quantity: int | None = None) -> dict:
+        """Read form data from the Nth cart product form."""
+        data = self.page.evaluate(
+            """([idx, qty]) => {
+                const forms = document.querySelectorAll('#shopping-cart form');
+                const form = forms[idx];
+                if (!form) return {};
+                if (qty !== null) {
+                    const qtyInput = form.querySelector('input[name="quantity"]');
+                    if (qtyInput) qtyInput.value = String(qty);
+                }
+                return Object.fromEntries(new FormData(form));
+            }""",
+            [index, quantity],
+        )
+        return data
 
     def update_quantity(self, qty: int, index: int = 0):
-        """Update the quantity for a cart row via direct AJAX POST."""
-        result = self.page.evaluate(self._CART_ACTION_JS, {
-            "index": index,
-            "quantity": qty,
-            "url": f"{self.base_url}index.php?route=checkout/cart|edit&language=en-gb",
-            "reloadUrl": f"{self.base_url}index.php?route=checkout/cart|list&language=en-gb",
-        })
-        if result and result.get("redirect"):
-            self.page.goto(result["redirect"])
+        """Update the quantity for a cart row via Playwright's request API."""
+        data = self._cart_form_data(index, quantity=qty)
+        url = f"{self.base_url}index.php?route=checkout/cart|edit&language=en-gb"
+        json_resp = self._oc_post(url, data)
+
+        if json_resp.get("redirect"):
+            self.page.goto(json_resp["redirect"])
+        else:
+            reload_url = f"{self.base_url}index.php?route=checkout/cart|list&language=en-gb"
+            self.page.evaluate(
+                self._RELOAD_HTML_JS,
+                {"url": reload_url, "target": "#shopping-cart"},
+            )
         self.page.wait_for_load_state("networkidle")
 
     def remove_item(self, index: int = 0):
-        """Remove a product from the cart by index via direct AJAX POST."""
-        result = self.page.evaluate(self._CART_ACTION_JS, {
-            "index": index,
-            "url": f"{self.base_url}index.php?route=checkout/cart|remove&language=en-gb",
-            "reloadUrl": f"{self.base_url}index.php?route=checkout/cart|list&language=en-gb",
-        })
-        if result and result.get("redirect"):
-            self.page.goto(result["redirect"])
+        """Remove a product from the cart by index via Playwright's request API."""
+        data = self._cart_form_data(index)
+        url = f"{self.base_url}index.php?route=checkout/cart|remove&language=en-gb"
+        json_resp = self._oc_post(url, data)
+
+        if json_resp.get("redirect"):
+            self.page.goto(json_resp["redirect"])
+        else:
+            reload_url = f"{self.base_url}index.php?route=checkout/cart|list&language=en-gb"
+            self.page.evaluate(
+                self._RELOAD_HTML_JS,
+                {"url": reload_url, "target": "#shopping-cart"},
+            )
         self.page.wait_for_load_state("networkidle")
 
     def click_continue_shopping(self):

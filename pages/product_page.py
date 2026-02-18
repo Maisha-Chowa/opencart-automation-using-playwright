@@ -253,50 +253,23 @@ class ProductPage(BasePage):
         """Set the product quantity."""
         self.page.locator("#input-quantity").fill(str(qty))
 
-    _ADD_TO_CART_JS = """async (opts) => {
-        const form = document.querySelector('#form-product');
-        if (!form) return {ok: false};
-
-        const fd = new URLSearchParams(new FormData(form));
-        const resp = await fetch(opts.url, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded',
-                       'X-Requested-With': 'XMLHttpRequest'},
-            body: fd
-        });
-        const json = await resp.json();
-
-        if (json.success) {
-            let box = document.getElementById('alert');
-            if (!box) {
-                box = document.createElement('div');
-                box.id = 'alert';
-                (document.getElementById('content') || document.body).prepend(box);
-            }
-            box.innerHTML =
-                '<div class="alert alert-success alert-dismissible">'
-                + json.success + '</div>';
-
-            // Refresh header cart widget
-            const cartHtml = await (await fetch(opts.cartInfoUrl)).text();
-            const hdr = document.querySelector('#header-cart');
-            if (hdr) hdr.innerHTML = cartHtml;
-        }
-
-        return {ok: true, json: json};
-    }"""
-
     def add_to_cart(self):
-        """Add the product to the cart via direct AJAX POST.
+        """Add the product to the cart via Playwright's request API.
 
-        OpenCart's jQuery handler does not reliably initialise in CI, so
-        we POST the form data directly, inject the success alert, and
-        refresh the header cart widget.
+        Uses ``page.request.post()`` which shares the browser context's
+        session cookies, then injects the success alert and refreshes
+        the header cart widget.
         """
-        self.page.evaluate(self._ADD_TO_CART_JS, {
-            "url": f"{self.base_url}index.php?route=checkout/cart|add&language=en-gb",
-            "cartInfoUrl": f"{self.base_url}index.php?route=common/cart|info&language=en-gb",
-        })
+        url = f"{self.base_url}index.php?route=checkout/cart|add&language=en-gb"
+        data = self._read_form_data(self.page, "#form-product")
+        json_resp = self._oc_post(url, data)
+        self.page.evaluate(self._INJECT_ERRORS_JS, json_resp)
+        if json_resp.get("success"):
+            cart_url = f"{self.base_url}index.php?route=common/cart|info&language=en-gb"
+            self.page.evaluate(
+                self._RELOAD_HTML_JS,
+                {"url": cart_url, "target": "#header-cart"},
+            )
         self.page.wait_for_load_state("networkidle")
 
     def add_to_wishlist(self):

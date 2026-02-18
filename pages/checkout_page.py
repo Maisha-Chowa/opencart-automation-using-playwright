@@ -227,11 +227,13 @@ class CheckoutPage(BasePage):
             )
 
     def click_continue(self):
-        """Submit the checkout form via direct AJAX POST."""
-        self._oc_submit(
+        """Submit the checkout form via Playwright's request API."""
+        json_resp = self._oc_submit(
             "#form-register",
             url=f"{self.base_url}index.php?route=checkout/register|save&language=en-gb",
         )
+        if isinstance(json_resp, dict) and json_resp.get("redirect"):
+            self.page.goto(json_resp["redirect"])
         self.page.wait_for_load_state("networkidle")
 
     # ================================================================
@@ -248,12 +250,11 @@ class CheckoutPage(BasePage):
 
         self.page.fill("#input-coupon", code)
 
-        self._oc_submit(
-            "#form-coupon",
-            reload={
-                "url": f"{self.base_url}index.php?route=checkout/cart|list&language=en-gb",
-                "target": "#shopping-cart",
-            },
+        self._oc_submit("#form-coupon")
+        reload_url = f"{self.base_url}index.php?route=checkout/cart|list&language=en-gb"
+        self.page.evaluate(
+            self._RELOAD_HTML_JS,
+            {"url": reload_url, "target": "#shopping-cart"},
         )
         self.page.wait_for_load_state("networkidle")
         self.page.wait_for_timeout(500)
@@ -270,12 +271,11 @@ class CheckoutPage(BasePage):
 
         self.page.fill("#input-voucher", code)
 
-        self._oc_submit(
-            "#form-voucher",
-            reload={
-                "url": f"{self.base_url}index.php?route=checkout/cart|list&language=en-gb",
-                "target": "#shopping-cart",
-            },
+        self._oc_submit("#form-voucher")
+        reload_url = f"{self.base_url}index.php?route=checkout/cart|list&language=en-gb"
+        self.page.evaluate(
+            self._RELOAD_HTML_JS,
+            {"url": reload_url, "target": "#shopping-cart"},
         )
         self.page.wait_for_load_state("networkidle")
         self.page.wait_for_timeout(500)

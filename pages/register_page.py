@@ -73,55 +73,6 @@ class RegisterPage(BasePage):
 
     # ── Form actions ───────────────────────────────────────────────
 
-    _SUBMIT_FORM_JS = """async () => {
-        const form = document.getElementById('form-register');
-        if (!form) return {ok: false, reason: 'form not found'};
-
-        const formData = new URLSearchParams(new FormData(form));
-        const resp = await fetch(form.action, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded',
-                       'X-Requested-With': 'XMLHttpRequest'},
-            body: formData
-        });
-        const json = await resp.json();
-
-        // Clear previous validation state
-        form.querySelectorAll('.is-invalid').forEach(
-            el => el.classList.remove('is-invalid'));
-        form.querySelectorAll('.invalid-feedback').forEach(
-            el => el.classList.remove('d-block'));
-        document.querySelectorAll('#alert .alert').forEach(el => el.remove());
-
-        if (json['error']) {
-            for (const [key, msg] of Object.entries(json['error'])) {
-                // Page-level warnings (privacy policy, duplicate email, etc.)
-                if (key === 'warning') {
-                    let alertBox = document.getElementById('alert');
-                    if (!alertBox) {
-                        alertBox = document.createElement('div');
-                        alertBox.id = 'alert';
-                        form.parentNode.insertBefore(alertBox, form);
-                    }
-                    alertBox.innerHTML =
-                        '<div class="alert alert-danger alert-dismissible">'
-                        + msg + '</div>';
-                    continue;
-                }
-                // Field-level errors
-                const el = document.getElementById('error-' + key);
-                if (el) {
-                    el.classList.add('d-block');
-                    el.textContent = msg;
-                    if (el.previousElementSibling)
-                        el.previousElementSibling.classList.add('is-invalid');
-                }
-            }
-        }
-
-        return {ok: true, redirect: json['redirect'] || null};
-    }"""
-
     def register(
         self,
         first_name: str,
@@ -130,13 +81,10 @@ class RegisterPage(BasePage):
         password: str,
         agree_privacy: bool = True,
     ):
-        """Fill out and submit the registration form, then wait for response.
+        """Fill out and submit the registration form via Playwright's request API.
 
-        OpenCart 4.x uses ``data-oc-toggle="ajax"`` on the form, which
-        relies on OpenCart's JS framework being fully initialised.  In CI
-        this handler sometimes fails to attach, so we submit the form
-        data directly via the Fetch API and replay the server JSON
-        response back into the DOM exactly as OpenCart's JS would.
+        Uses ``page.request.post()`` which shares the browser context's
+        session cookies, then injects errors/alerts back into the DOM.
         """
         self.page.fill("#input-firstname", first_name)
         self.page.fill("#input-lastname", last_name)
@@ -146,12 +94,10 @@ class RegisterPage(BasePage):
         if agree_privacy:
             self.page.locator("input[name='agree']").check()
 
-        result = self.page.evaluate(self._SUBMIT_FORM_JS)
+        json_resp = self._oc_submit("#form-register")
 
-        # On success the server returns a redirect URL; navigate to it
-        # explicitly so Playwright waits for the navigation to complete.
-        if result and result.get("redirect"):
-            self.page.goto(result["redirect"])
+        if json_resp.get("redirect"):
+            self.page.goto(json_resp["redirect"])
         self.page.wait_for_load_state("networkidle")
 
     def logout(self):
