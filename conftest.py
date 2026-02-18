@@ -65,35 +65,6 @@ def home_page(page: Page, base_url: str) -> Page:
 
 
 # ============================================================
-# reCAPTCHA Mock for CI
-# ============================================================
-
-_GRECAPTCHA_MOCK_JS = """
-if (typeof grecaptcha === 'undefined') {
-    window.grecaptcha = {
-        execute: () => Promise.resolve('mock-token'),
-        ready: (cb) => cb(),
-        render: () => 0,
-        reset: () => {},
-        getResponse: () => 'mock-token'
-    };
-}
-"""
-
-
-@pytest.fixture(autouse=True)
-def _mock_recaptcha(page: Page):
-    """Inject a reCAPTCHA stub on every page navigation.
-
-    OpenCart 4.x may call grecaptcha.execute() in its form JS even when
-    the CAPTCHA extension is disabled.  In CI the Google script is never
-    loaded, so the call throws and silently aborts form submission.
-    This fixture injects a no-op stub before any page script can run.
-    """
-    page.add_init_script(_GRECAPTCHA_MOCK_JS)
-
-
-# ============================================================
 # Trace on Failure & Screenshot Capture
 # ============================================================
 
