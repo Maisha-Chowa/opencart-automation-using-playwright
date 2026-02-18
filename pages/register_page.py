@@ -81,13 +81,7 @@ class RegisterPage(BasePage):
         password: str,
         agree_privacy: bool = True,
     ):
-        """Fill out and submit the registration form via native browser POST.
-
-        The form already has an ``action`` URL (includes CSRF token).
-        After submission the browser navigates to the JSON response;
-        we parse it, then either follow the redirect (success) or
-        go back and inject the validation errors.
-        """
+        """Fill the registration form and click Continue."""
         self.page.fill("#input-firstname", first_name)
         self.page.fill("#input-lastname", last_name)
         self.page.fill("#input-email", email)
@@ -96,17 +90,12 @@ class RegisterPage(BasePage):
         if agree_privacy:
             self.page.locator("input[name='agree']").check()
 
-        register_url = self.page.url
-        json_resp = self._oc_form_post("#form-register")
-
-        if isinstance(json_resp, dict) and json_resp.get("redirect"):
-            self.page.goto(json_resp["redirect"])
-        else:
-            self.page.goto(register_url)
-            self.page.wait_for_load_state("networkidle")
-            if isinstance(json_resp, dict):
-                self.page.evaluate(self._CLEAR_FORM_ERRORS_JS, "#form-register")
-                self.page.evaluate(self._INJECT_RESPONSE_JS, json_resp)
+        self.page.evaluate(
+            "document.querySelector('#form-register')?.setAttribute('novalidate', '')"
+        )
+        with self.page.expect_response(lambda r: "register" in r.url, timeout=15000):
+            self.page.get_by_role("button", name="Continue").click()
+        self.page.wait_for_timeout(1000)
         self.page.wait_for_load_state("networkidle")
 
     def logout(self):

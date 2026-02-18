@@ -126,6 +126,20 @@ jobs:
           echo ""
           echo "=== Install directory removed ==="
 
+          # Fix cookie path: the installer sets HTTP_SERVER to "http://localhost/"
+          # which causes OpenCart to derive cookie path as "//" instead of "/".
+          # Patch both config.php files so the parsed path is exactly "/".
+          docker exec opencart-app sed -i \
+            "s|define('HTTP_SERVER', 'http://localhost/');|define('HTTP_SERVER', 'http://localhost');|g" \
+            /var/www/html/config.php
+          docker exec opencart-app sed -i \
+            "s|define('HTTP_SERVER', 'http://localhost/admin/');|define('HTTP_SERVER', 'http://localhost/admin');|g" \
+            /var/www/html/admin/config.php 2>/dev/null || true
+          echo "=== Fixed HTTP_SERVER in config.php (cookie path fix) ==="
+
+          # Verify the fix
+          docker exec opencart-app grep HTTP_SERVER /var/www/html/config.php
+
       - name: Verify installation
         run: |
           # Check storefront loads
@@ -173,80 +187,44 @@ jobs:
           docker exec opencart-app bash -c "rm -rf /var/www/html/system/storage/cache/*" 2>/dev/null || true
           echo "CAPTCHA disabled, caches cleared."
 
-      - name: Diagnose session handling
+      - name: Smoke test (click Add to Cart, verify session)
         run: |
           python3 << 'PYEOF'
-          import json, sys
+          import sys
           from playwright.sync_api import sync_playwright
-
-          def dump_session_cookies(ctx, label):
-              cookies = ctx.cookies()
-              sc = [c for c in cookies if "sess" in c["name"].lower()]
-              for c in sc:
-                  print(f"  [{label}] {c['name']}={c['value'][:16]}... "
-                        f"domain={c['domain']} path={c['path']} "
-                        f"secure={c.get('secure')} sameSite={c.get('sameSite')}")
-              if not sc:
-                  print(f"  [{label}] NO session cookies found! All cookies: {[c['name'] for c in cookies]}")
-              return sc
 
           with sync_playwright() as p:
               browser = p.chromium.launch(headless=True)
               ctx = browser.new_context()
               page = ctx.new_page()
 
-              # Step 1: Load product page
               page.goto("http://localhost/index.php?route=product/product&language=en-gb&product_id=43")
               page.wait_for_load_state("networkidle")
-              title = page.title()
-              print(f"Product page title: {title}")
-              if "404" in title:
-                  browser.close()
-                  sys.exit(1)
+              print(f"Product page title: {page.title()}")
 
-              sc1 = dump_session_cookies(ctx, "after product page")
+              # Verify session cookie path is "/" not "//"
+              cookies = ctx.cookies()
+              for c in cookies:
+                  if "sess" in c["name"].lower():
+                      print(f"Cookie: {c['name']} path={c['path']} sameSite={c.get('sameSite')}")
+                      assert c["path"] == "/", f"FATAL: cookie path is '{c['path']}' (expected '/') — check HTTP_SERVER in config.php"
 
-              # Step 2: Check jQuery
-              jquery = page.evaluate("typeof jQuery")
-              print(f"jQuery type: {jquery}")
+              # Click Add to Cart (uses jQuery AJAX)
+              page.locator("#button-cart").click()
+              page.wait_for_selector(".alert-success", timeout=10000)
+              print("Add to cart: success alert appeared")
 
-              # Step 3: Try clicking Add to Cart button (AJAX)
-              method = "none"
-              try:
-                  page.locator("#button-cart").click(timeout=3000)
-                  page.wait_for_selector(".alert-success", timeout=10000)
-                  alert = page.locator(".alert-success").first.text_content()
-                  print(f"Button click WORKED: {alert[:80]}")
-                  method = "button_click"
-              except Exception as e:
-                  print(f"Button click failed: {e}")
-
-              sc2 = dump_session_cookies(ctx, "after add-to-cart")
-
-              # Step 4: Navigate to cart
+              # Verify session persists to cart page
               page.goto("http://localhost/index.php?route=checkout/cart&language=en-gb")
               page.wait_for_load_state("networkidle")
-
-              sc3 = dump_session_cookies(ctx, "after cart page")
-
               names = page.evaluate("""() => Array.from(
                   document.querySelectorAll("#shopping-cart table tbody td:nth-child(2) a")
               ).map(e => e.textContent.trim())""")
               print(f"Cart products: {names}")
-
-              # Compare session IDs
-              ids = [sc1, sc2, sc3]
-              vals = [s[0]["value"] if s else "NONE" for s in ids]
-              print(f"Session ID consistency: {vals[0][:12]}... -> {vals[1][:12]}... -> {vals[2][:12]}...")
-              if len(set(vals)) > 1:
-                  print("WARNING: Session ID changed between requests!")
-
               browser.close()
-              if "MacBook" in names:
-                  print(f"Smoke test PASSED (method: {method})")
-              else:
-                  print(f"Smoke test FAILED (method: {method})")
-                  sys.exit(1)
+
+              assert "MacBook" in names, f"Smoke test FAILED: cart empty despite successful add. Products: {names}"
+              print("Smoke test PASSED")
           PYEOF
 
       - name: Run Playwright tests

@@ -186,36 +186,20 @@ class CartPage(BasePage):
     # Cart actions
     # ================================================================
 
-    def _cart_form_data(self, index: int = 0, quantity: int | None = None) -> dict:
-        """Read form data from the Nth cart product form."""
-        data = self.page.evaluate(
-            """([idx, qty]) => {
-                const forms = document.querySelectorAll('#shopping-cart form');
-                const form = forms[idx];
-                if (!form) return {};
-                if (qty !== null) {
-                    const qtyInput = form.querySelector('input[name="quantity"]');
-                    if (qtyInput) qtyInput.value = String(qty);
-                }
-                return Object.fromEntries(new FormData(form));
-            }""",
-            [index, quantity],
-        )
-        return data
-
     def update_quantity(self, qty: int, index: int = 0):
-        """Update the quantity for a cart row via native browser form POST."""
-        data = self._cart_form_data(index, quantity=qty)
-        url = f"{self.base_url}index.php?route=checkout/cart|edit&language=en-gb"
-        self._oc_data_post(url, data)
-        self.open()
+        """Update the quantity for a cart row by index."""
+        self.page.locator('#shopping-cart input[name="quantity"]').nth(index).fill(str(qty))
+        with self.page.expect_response(lambda r: "cart" in r.url):
+            self.page.locator('#shopping-cart button[aria-label="Update"]').nth(index).click()
+        self.page.wait_for_timeout(1000)
+        self.page.wait_for_load_state("networkidle")
 
     def remove_item(self, index: int = 0):
-        """Remove a product from the cart by index via native browser form POST."""
-        data = self._cart_form_data(index)
-        url = f"{self.base_url}index.php?route=checkout/cart|remove&language=en-gb"
-        self._oc_data_post(url, data)
-        self.open()
+        """Remove a product from the cart by index."""
+        with self.page.expect_response(lambda r: "cart" in r.url):
+            self.page.locator('#shopping-cart button[aria-label="Remove"]').nth(index).click()
+        self.page.wait_for_timeout(1000)
+        self.page.wait_for_load_state("networkidle")
 
     def click_continue_shopping(self):
         """Click the Continue Shopping link."""

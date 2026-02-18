@@ -227,18 +227,13 @@ class CheckoutPage(BasePage):
             )
 
     def click_continue(self):
-        """Submit the checkout form via native browser form POST."""
-        checkout_url = self.page.url
-        save_url = f"{self.base_url}index.php?route=checkout/register|save&language=en-gb"
-        json_resp = self._oc_form_post("#form-register", url=save_url)
-
-        if isinstance(json_resp, dict) and json_resp.get("redirect"):
-            self.page.goto(json_resp["redirect"])
-        else:
-            self.page.goto(checkout_url)
-            self.page.wait_for_load_state("networkidle")
-            if isinstance(json_resp, dict):
-                self.page.evaluate(self._INJECT_RESPONSE_JS, json_resp)
+        """Click the Continue button and wait for the AJAX response."""
+        self.page.evaluate(
+            "document.querySelector('#form-register')?.setAttribute('novalidate', '')"
+        )
+        with self.page.expect_response(lambda r: "checkout" in r.url, timeout=15000):
+            self.page.locator("#button-register").click()
+        self.page.wait_for_timeout(1000)
         self.page.wait_for_load_state("networkidle")
 
     # ================================================================
@@ -246,7 +241,7 @@ class CheckoutPage(BasePage):
     # ================================================================
 
     def apply_coupon(self, code: str):
-        """Open the coupon accordion, enter code, and apply via native form POST."""
+        """Open the coupon accordion, enter code, and submit."""
         accordion = self.page.locator('button:has-text("Use Coupon Code")')
         collapsed = self.page.locator("#collapse-coupon")
         if not collapsed.is_visible():
@@ -254,17 +249,13 @@ class CheckoutPage(BasePage):
             self.page.wait_for_timeout(500)
 
         self.page.fill("#input-coupon", code)
-
-        cart_url = self.page.url
-        json_resp = self._oc_form_post("#form-coupon")
-        self.page.goto(cart_url)
+        with self.page.expect_response(lambda r: "coupon" in r.url):
+            self.page.locator('#form-coupon button[type="submit"]').click()
         self.page.wait_for_load_state("networkidle")
-        if isinstance(json_resp, dict):
-            self.page.evaluate(self._INJECT_RESPONSE_JS, json_resp)
         self.page.wait_for_timeout(500)
 
     def apply_gift_certificate(self, code: str):
-        """Open the gift certificate accordion, enter code, and apply via native form POST."""
+        """Open the gift certificate accordion, enter code, and submit."""
         accordion = self.page.locator(
             'button:has-text("Use Gift Certificate")'
         )
@@ -274,13 +265,9 @@ class CheckoutPage(BasePage):
             self.page.wait_for_timeout(500)
 
         self.page.fill("#input-voucher", code)
-
-        cart_url = self.page.url
-        json_resp = self._oc_form_post("#form-voucher")
-        self.page.goto(cart_url)
+        with self.page.expect_response(lambda r: "voucher" in r.url):
+            self.page.locator('#form-voucher button[type="submit"]').click()
         self.page.wait_for_load_state("networkidle")
-        if isinstance(json_resp, dict):
-            self.page.evaluate(self._INJECT_RESPONSE_JS, json_resp)
         self.page.wait_for_timeout(500)
 
     def get_cart_totals(self) -> dict[str, str]:

@@ -254,21 +254,9 @@ class ProductPage(BasePage):
         self.page.locator("#input-quantity").fill(str(qty))
 
     def add_to_cart(self):
-        """Add the product to the cart via native browser form POST.
-
-        Submits ``#form-product`` which triggers a real page navigation
-        (browser sends its own cookies), reads the JSON response, then
-        navigates back to the product page so the test can continue.
-        """
-        product_url = self.page.url
-        add_url = f"{self.base_url}index.php?route=checkout/cart|add&language=en-gb"
-        json_resp = self._oc_form_post("#form-product", url=add_url)
-
-        self.page.goto(product_url)
-        self.page.wait_for_load_state("networkidle")
-
-        if isinstance(json_resp, dict):
-            self.page.evaluate(self._INJECT_RESPONSE_JS, json_resp)
+        """Click the Add to Cart button and wait for the success alert."""
+        self.page.locator("#button-cart").click()
+        self.page.wait_for_selector(".alert-success", timeout=10000)
 
     def add_to_wishlist(self):
         """Click the Add to Wish List button."""
