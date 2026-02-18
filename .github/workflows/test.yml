@@ -126,19 +126,31 @@ jobs:
           echo ""
           echo "=== Install directory removed ==="
 
-          # Fix cookie path: the installer sets HTTP_SERVER to "http://localhost/"
+          # Fix cookie path: the installer sets HTTP_SERVER with a trailing slash
           # which causes OpenCart to derive cookie path as "//" instead of "/".
-          # Patch both config.php files so the parsed path is exactly "/".
-          docker exec opencart-app sed -i \
-            "s|define('HTTP_SERVER', 'http://localhost/');|define('HTTP_SERVER', 'http://localhost');|g" \
-            /var/www/html/config.php
-          docker exec opencart-app sed -i \
-            "s|define('HTTP_SERVER', 'http://localhost/admin/');|define('HTTP_SERVER', 'http://localhost/admin');|g" \
-            /var/www/html/admin/config.php 2>/dev/null || true
-          echo "=== Fixed HTTP_SERVER in config.php (cookie path fix) ==="
+          docker exec -i opencart-app php << 'PHPEOF'
+          <?php
+          $files = [
+              "/var/www/html/config.php",
+              "/var/www/html/admin/config.php",
+          ];
+          foreach ($files as $f) {
+              if (!file_exists($f)) continue;
+              $c = file_get_contents($f);
+              // Remove trailing slash from HTTP_SERVER URLs: "http://host/') → "http://host')
+              $c = preg_replace("#(define\('HTTP_SERVER',\s*'https?://[^']*?)/('\);)#", '$1$2', $c);
+              file_put_contents($f, $c);
+              // Show result
+              foreach (file($f) as $line) {
+                  if (stripos($line, 'HTTP_SERVER') !== false) echo trim($line) . "\n";
+              }
+          }
+          PHPEOF
 
-          # Verify the fix
-          docker exec opencart-app grep HTTP_SERVER /var/www/html/config.php
+          # Restart Apache so opcache picks up the changed file
+          docker exec opencart-app apache2ctl graceful 2>/dev/null || true
+          sleep 2
+          echo "=== Config patched, Apache restarted ==="
 
       - name: Verify installation
         run: |
