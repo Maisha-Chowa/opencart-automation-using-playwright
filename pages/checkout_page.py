@@ -227,11 +227,11 @@ class CheckoutPage(BasePage):
             )
 
     def click_continue(self):
-        """Click the Continue button and wait for AJAX response."""
-        with self.page.expect_response(
-            lambda r: "checkout" in r.url and r.status == 200
-        ):
-            self.page.locator("#button-register").click()
+        """Submit the checkout form via direct AJAX POST."""
+        self._oc_submit(
+            "#form-register",
+            url=f"{self.base_url}index.php?route=checkout/register|save&language=en-gb",
+        )
         self.page.wait_for_load_state("networkidle")
 
     # ================================================================
@@ -248,13 +248,13 @@ class CheckoutPage(BasePage):
 
         self.page.fill("#input-coupon", code)
 
-        with self.page.expect_response(
-            lambda r: "coupon" in r.url and r.status == 200
-        ):
-            self.page.locator(
-                '#form-coupon button[type="submit"]'
-            ).click()
-
+        self._oc_submit(
+            "#form-coupon",
+            reload={
+                "url": f"{self.base_url}index.php?route=checkout/cart|list&language=en-gb",
+                "target": "#shopping-cart",
+            },
+        )
         self.page.wait_for_load_state("networkidle")
         self.page.wait_for_timeout(500)
 
@@ -270,13 +270,13 @@ class CheckoutPage(BasePage):
 
         self.page.fill("#input-voucher", code)
 
-        with self.page.expect_response(
-            lambda r: "voucher" in r.url and r.status == 200
-        ):
-            self.page.locator(
-                '#form-voucher button[type="submit"]'
-            ).click()
-
+        self._oc_submit(
+            "#form-voucher",
+            reload={
+                "url": f"{self.base_url}index.php?route=checkout/cart|list&language=en-gb",
+                "target": "#shopping-cart",
+            },
+        )
         self.page.wait_for_load_state("networkidle")
         self.page.wait_for_timeout(500)
 

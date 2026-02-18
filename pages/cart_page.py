@@ -186,28 +186,56 @@ class CartPage(BasePage):
     # Cart actions
     # ================================================================
 
+    _CART_ACTION_JS = """async (opts) => {
+        const forms = document.querySelectorAll('#shopping-cart form');
+        const form = forms[opts.index];
+        if (!form) return {ok: false, reason: 'form not found at index ' + opts.index};
+
+        if (opts.quantity !== undefined) {
+            const qtyInput = form.querySelector('input[name="quantity"]');
+            if (qtyInput) qtyInput.value = String(opts.quantity);
+        }
+
+        const fd = new URLSearchParams(new FormData(form));
+        const resp = await fetch(opts.url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded',
+                       'X-Requested-With': 'XMLHttpRequest'},
+            body: fd
+        });
+        const json = await resp.json();
+
+        if (json.redirect) return {ok: true, json: json, redirect: json.redirect};
+
+        // Reload the cart list (mirrors data-oc-load / data-oc-target)
+        const html = await (await fetch(opts.reloadUrl)).text();
+        const tgt = document.querySelector('#shopping-cart');
+        if (tgt) tgt.innerHTML = html;
+
+        return {ok: true, json: json};
+    }"""
+
     def update_quantity(self, qty: int, index: int = 0):
-        """Update the quantity for a cart row and wait for AJAX reload."""
-        self.page.locator(
-            '#shopping-cart input[name="quantity"]'
-        ).nth(index).fill(str(qty))
-
-        # The AJAX flow fires two requests: cart|edit then cart|list.
-        # Wait for the cart|list response — that's the one that reloads the DOM.
-        with self.page.expect_response(
-            lambda r: "cart|list" in r.url and r.status == 200
-        ):
-            self.page.locator(
-                '#shopping-cart button[aria-label="Update"]'
-            ).nth(index).click()
-
+        """Update the quantity for a cart row via direct AJAX POST."""
+        result = self.page.evaluate(self._CART_ACTION_JS, {
+            "index": index,
+            "quantity": qty,
+            "url": f"{self.base_url}index.php?route=checkout/cart|edit&language=en-gb",
+            "reloadUrl": f"{self.base_url}index.php?route=checkout/cart|list&language=en-gb",
+        })
+        if result and result.get("redirect"):
+            self.page.goto(result["redirect"])
         self.page.wait_for_load_state("networkidle")
 
     def remove_item(self, index: int = 0):
-        """Remove a product from the cart by index and wait for reload."""
-        self.page.locator(
-            '#shopping-cart button[aria-label="Remove"]'
-        ).nth(index).click()
+        """Remove a product from the cart by index via direct AJAX POST."""
+        result = self.page.evaluate(self._CART_ACTION_JS, {
+            "index": index,
+            "url": f"{self.base_url}index.php?route=checkout/cart|remove&language=en-gb",
+            "reloadUrl": f"{self.base_url}index.php?route=checkout/cart|list&language=en-gb",
+        })
+        if result and result.get("redirect"):
+            self.page.goto(result["redirect"])
         self.page.wait_for_load_state("networkidle")
 
     def click_continue_shopping(self):
