@@ -266,10 +266,7 @@ class ProductPage(BasePage):
         self.page.evaluate(self._INJECT_ERRORS_JS, json_resp)
         if json_resp.get("success"):
             cart_url = f"{self.base_url}index.php?route=common/cart|info&language=en-gb"
-            self.page.evaluate(
-                self._RELOAD_HTML_JS,
-                {"url": cart_url, "target": "#header-cart"},
-            )
+            self._oc_reload_html(cart_url, "#header-cart")
         self.page.wait_for_load_state("networkidle")
 
     def add_to_wishlist(self):

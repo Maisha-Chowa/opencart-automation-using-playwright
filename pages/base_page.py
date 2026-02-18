@@ -53,11 +53,9 @@ class BasePage:
         form.querySelectorAll('.invalid-feedback').forEach(el => el.classList.remove('d-block'));
     }"""
 
-    _RELOAD_HTML_JS = """async (opts) => {
-        const resp = await fetch(opts.url);
-        const html = await resp.text();
-        const tgt = document.querySelector(opts.target);
-        if (tgt) tgt.innerHTML = html;
+    _SET_INNER_HTML_JS = """([selector, html]) => {
+        const el = document.querySelector(selector);
+        if (el) el.innerHTML = html;
     }"""
 
     # ── Helpers ────────────────────────────────────────────────────
@@ -84,6 +82,11 @@ class BasePage:
             }""",
             form_selector,
         )
+
+    def _oc_reload_html(self, url: str, target_selector: str):
+        """GET HTML via Playwright's request API and inject it into a DOM element."""
+        resp = self.page.request.get(url)
+        self.page.evaluate(self._SET_INNER_HTML_JS, [target_selector, resp.text()])
 
     def _oc_post(self, url: str, data: dict) -> dict:
         """POST form data via Playwright's request API (shares session cookies).

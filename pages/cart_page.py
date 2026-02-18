@@ -213,10 +213,7 @@ class CartPage(BasePage):
             self.page.goto(json_resp["redirect"])
         else:
             reload_url = f"{self.base_url}index.php?route=checkout/cart|list&language=en-gb"
-            self.page.evaluate(
-                self._RELOAD_HTML_JS,
-                {"url": reload_url, "target": "#shopping-cart"},
-            )
+            self._oc_reload_html(reload_url, "#shopping-cart")
         self.page.wait_for_load_state("networkidle")
 
     def remove_item(self, index: int = 0):
@@ -229,10 +226,7 @@ class CartPage(BasePage):
             self.page.goto(json_resp["redirect"])
         else:
             reload_url = f"{self.base_url}index.php?route=checkout/cart|list&language=en-gb"
-            self.page.evaluate(
-                self._RELOAD_HTML_JS,
-                {"url": reload_url, "target": "#shopping-cart"},
-            )
+            self._oc_reload_html(reload_url, "#shopping-cart")
         self.page.wait_for_load_state("networkidle")
 
     def click_continue_shopping(self):
