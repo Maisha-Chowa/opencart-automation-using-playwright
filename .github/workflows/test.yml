@@ -173,47 +173,80 @@ jobs:
           docker exec opencart-app bash -c "rm -rf /var/www/html/system/storage/cache/*" 2>/dev/null || true
           echo "CAPTCHA disabled, caches cleared."
 
-      - name: Smoke test (add to cart via native form POST)
+      - name: Diagnose session handling
         run: |
           python3 << 'PYEOF'
           import json, sys
           from playwright.sync_api import sync_playwright
 
+          def dump_session_cookies(ctx, label):
+              cookies = ctx.cookies()
+              sc = [c for c in cookies if "sess" in c["name"].lower()]
+              for c in sc:
+                  print(f"  [{label}] {c['name']}={c['value'][:16]}... "
+                        f"domain={c['domain']} path={c['path']} "
+                        f"secure={c.get('secure')} sameSite={c.get('sameSite')}")
+              if not sc:
+                  print(f"  [{label}] NO session cookies found! All cookies: {[c['name'] for c in cookies]}")
+              return sc
+
           with sync_playwright() as p:
               browser = p.chromium.launch(headless=True)
-              page = browser.new_context().new_page()
+              ctx = browser.new_context()
+              page = ctx.new_page()
 
+              # Step 1: Load product page
               page.goto("http://localhost/index.php?route=product/product&language=en-gb&product_id=43")
               page.wait_for_load_state("networkidle")
               title = page.title()
               print(f"Product page title: {title}")
-
-              if "404" in title or "Not Found" in title:
-                  print("SKIP: Product page returned 404 — installation issue")
+              if "404" in title:
                   browser.close()
                   sys.exit(1)
 
-              with page.expect_navigation():
-                  page.evaluate("""() => {
-                      const form = document.getElementById("form-product");
-                      form.action = "/index.php?route=checkout/cart|add&language=en-gb";
-                      form.method = "POST";
-                      form.submit();
-                  }""")
-              page.wait_for_load_state("networkidle")
-              body = json.loads(page.evaluate("() => document.body.innerText"))
-              print(f"Add-to-cart response: {body}")
+              sc1 = dump_session_cookies(ctx, "after product page")
 
+              # Step 2: Check jQuery
+              jquery = page.evaluate("typeof jQuery")
+              print(f"jQuery type: {jquery}")
+
+              # Step 3: Try clicking Add to Cart button (AJAX)
+              method = "none"
+              try:
+                  page.locator("#button-cart").click(timeout=3000)
+                  page.wait_for_selector(".alert-success", timeout=10000)
+                  alert = page.locator(".alert-success").first.text_content()
+                  print(f"Button click WORKED: {alert[:80]}")
+                  method = "button_click"
+              except Exception as e:
+                  print(f"Button click failed: {e}")
+
+              sc2 = dump_session_cookies(ctx, "after add-to-cart")
+
+              # Step 4: Navigate to cart
               page.goto("http://localhost/index.php?route=checkout/cart&language=en-gb")
               page.wait_for_load_state("networkidle")
+
+              sc3 = dump_session_cookies(ctx, "after cart page")
+
               names = page.evaluate("""() => Array.from(
                   document.querySelectorAll("#shopping-cart table tbody td:nth-child(2) a")
               ).map(e => e.textContent.trim())""")
               print(f"Cart products: {names}")
-              browser.close()
 
-              assert "MacBook" in names, f"Smoke test FAILED: cart empty. Response: {body}"
-              print("Smoke test PASSED")
+              # Compare session IDs
+              ids = [sc1, sc2, sc3]
+              vals = [s[0]["value"] if s else "NONE" for s in ids]
+              print(f"Session ID consistency: {vals[0][:12]}... -> {vals[1][:12]}... -> {vals[2][:12]}...")
+              if len(set(vals)) > 1:
+                  print("WARNING: Session ID changed between requests!")
+
+              browser.close()
+              if "MacBook" in names:
+                  print(f"Smoke test PASSED (method: {method})")
+              else:
+                  print(f"Smoke test FAILED (method: {method})")
+                  sys.exit(1)
           PYEOF
 
       - name: Run Playwright tests
