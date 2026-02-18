@@ -13,8 +13,8 @@ from playwright.sync_api import Page
 # Load environment variables from .env file
 load_dotenv()
 
-BASE_URL = os.getenv("BASE_URL", "http://localhost")
-ADMIN_URL = os.getenv("ADMIN_URL", "http://localhost/admin")
+BASE_URL = os.getenv("BASE_URL", "http://localhost").rstrip("/") + "/"
+ADMIN_URL = os.getenv("ADMIN_URL", "http://localhost/admin").rstrip("/") + "/"
 HEADLESS = os.getenv("HEADLESS", "true").lower() == "true"
 SLOW_MO = int(os.getenv("SLOW_MO", "0"))
 

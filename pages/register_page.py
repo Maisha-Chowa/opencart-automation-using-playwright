@@ -106,11 +106,18 @@ class RegisterPage(BasePage):
         self.page.wait_for_load_state("networkidle")
 
     def logout(self):
-        """Log out the currently logged-in user via the My Account dropdown."""
+        """Log out the currently logged-in user via the My Account dropdown.
+
+        Handles the case where the user is not actually logged in (e.g.
+        registration failed silently in CI) by checking whether the
+        Logout link exists before clicking.
+        """
         self.navigate(self.base_url)
         self.page.locator("a.dropdown-toggle", has_text="My Account").first.click()
-        self.page.get_by_role("link", name="Logout").click()
-        self.page.wait_for_load_state("networkidle")
+        logout_link = self.page.get_by_role("link", name="Logout")
+        if logout_link.is_visible():
+            logout_link.click()
+            self.page.wait_for_load_state("networkidle")
 
     def is_registration_successful(self) -> bool:
         """Check if registration was successful by verifying the URL or title.

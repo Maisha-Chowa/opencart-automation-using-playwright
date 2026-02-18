@@ -71,11 +71,26 @@ jobs:
           echo "Verifying storefront..."
           curl -sL http://localhost | grep -q "<title>" && echo "Storefront is ready!" || echo "Warning: Storefront may not be ready"
 
+      - name: Configure OpenCart for testing
+        run: |
+          # Disable CAPTCHA on registration/login/contact pages so form tests work
+          docker exec opencart-db mysql -uroot -popencart_password opencart -e "
+            DELETE FROM oc_setting WHERE \`key\` IN ('captcha_page', 'config_captcha');
+            UPDATE oc_setting SET \`value\` = '' WHERE \`key\` = 'config_mail_engine';
+          " 2>/dev/null || true
+
+          # Verify DB has products (sanity check)
+          docker exec opencart-db mysql -uroot -popencart_password opencart -e "
+            SELECT product_id, pd.name FROM oc_product p
+            JOIN oc_product_description pd USING(product_id)
+            WHERE pd.language_id=1 LIMIT 5;
+          " 2>/dev/null || echo "Warning: Could not verify products"
+
       - name: Run Playwright tests
         run: pytest --browser ${{ matrix.browser }} -m "not admin"
         env:
-          BASE_URL: http://localhost
-          ADMIN_URL: http://localhost/admin
+          BASE_URL: http://localhost/
+          ADMIN_URL: http://localhost/admin/
           HEADLESS: "true"
 
       - name: Upload screenshots on failure
