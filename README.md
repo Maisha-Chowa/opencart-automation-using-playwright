@@ -8,6 +8,8 @@ A production-grade QA automation framework for the **OpenCart 4.0** e-commerce p
 
 **102 tests | 100% pass rate | 7 test suites | ~7 min execution time**
 
+**[View Live Allure Report](https://maisha-chowa.github.io/opencart-automation-using-playwright/)**
+
 ### Allure Report Overview
 
 ![Allure Overview](docs/allure-overview.png)
@@ -258,6 +260,7 @@ The GitHub Actions workflow (`.github/workflows/test.yml`) runs on every push an
 2. Installs Python + Playwright browsers
 3. Runs tests across **Chromium, Firefox, and WebKit** (matrix strategy)
 4. Uploads Allure results, screenshots, and traces as artifacts
+5. Publishes a live **[Allure Report](https://maisha-chowa.github.io/opencart-automation-using-playwright/)** to GitHub Pages with history tracking
 
 ---
 
