@@ -126,18 +126,19 @@ jobs:
           echo ""
           echo "=== Install directory removed ==="
 
-          # Fix cookie path: the installer sets HTTP_SERVER with trailing slash
-          # causing OpenCart to derive cookie path "//" instead of "/".
-          # On HTTP_SERVER lines, remove the slash before ');
-          docker exec opencart-app sed -i "/HTTP_SERVER/ s|/');|');|" /var/www/html/config.php
-          docker exec opencart-app sed -i "/HTTP_SERVER/ s|/');|');|" /var/www/html/admin/config.php 2>/dev/null || true
+          # Fix cookie path: the Docker image's session.php computes
+          #   path = dirname(PHP_SELF) . '/'
+          # When PHP_SELF is /index.php, dirname() returns "/" so path becomes "//".
+          # Patch it to always use "/" instead.
+          docker exec opencart-app sed -i "s|'path'.*dirname.*PHP_SELF.*|'path'     => '/',|" \
+            /var/www/html/catalog/controller/startup/session.php
 
-          # Restart Apache so opcache uses the updated config
+          # Restart Apache to clear opcache
           docker exec opencart-app apache2ctl graceful 2>/dev/null || true
           sleep 2
 
-          echo "=== Config patched ==="
-          docker exec opencart-app grep HTTP_SERVER /var/www/html/config.php
+          echo "=== Session controller patched ==="
+          docker exec opencart-app grep "'path'" /var/www/html/catalog/controller/startup/session.php
 
       - name: Verify installation
         run: |
@@ -206,7 +207,7 @@ jobs:
               for c in cookies:
                   if "sess" in c["name"].lower():
                       print(f"Cookie: {c['name']} path={c['path']} sameSite={c.get('sameSite')}")
-                      assert c["path"] == "/", f"FATAL: cookie path is '{c['path']}' (expected '/') — check HTTP_SERVER in config.php"
+                      assert c["path"] == "/", f"FATAL: cookie path is '{c['path']}' (expected '/') — session.php patch failed"
 
               # Click Add to Cart (uses jQuery AJAX)
               page.locator("#button-cart").click()
