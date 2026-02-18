@@ -168,27 +168,48 @@ class CheckoutPage(BasePage):
         ]
 
     def get_alert_text(self) -> str:
-        """Return the text of any visible alert on the page."""
+        """Return the text of any visible alert on the page.
+
+        Falls back to the captured AJAX response when the DOM alert
+        has already been auto-dismissed by OpenCart's timer.
+        """
         alert = self.page.locator(".alert").first
         if alert.count() and alert.is_visible():
             return (alert.text_content() or "").strip()
+        resp = getattr(self, "_last_ajax_response", None)
+        if resp:
+            return resp.get("error", resp.get("success", ""))
         return ""
 
     def has_success_alert(self) -> bool:
-        """Check if a success alert is visible (waits briefly for AJAX)."""
+        """Check if the last AJAX form action returned a success response.
+
+        Checks the captured response JSON first (reliable even if the
+        DOM alert was auto-dismissed by OpenCart's 7-second timer),
+        then falls back to a DOM visibility check.
+        """
+        resp = getattr(self, "_last_ajax_response", None)
+        if resp and "success" in resp:
+            return True
         try:
             self.page.locator(".alert-success").first.wait_for(
-                state="visible", timeout=5000
+                state="visible", timeout=3000
             )
             return True
         except Exception:
             return False
 
     def has_danger_alert(self) -> bool:
-        """Check if a danger alert is visible (waits briefly for AJAX)."""
+        """Check if the last AJAX form action returned an error response.
+
+        Checks the captured response JSON first, then falls back to DOM.
+        """
+        resp = getattr(self, "_last_ajax_response", None)
+        if resp and "error" in resp:
+            return True
         try:
             self.page.locator(".alert-danger").first.wait_for(
-                state="visible", timeout=5000
+                state="visible", timeout=3000
             )
             return True
         except Exception:
@@ -261,10 +282,14 @@ class CheckoutPage(BasePage):
             self.page.wait_for_timeout(500)
 
         self.page.fill("#input-coupon", code)
-        with self.page.expect_response(lambda r: "coupon" in r.url):
+        with self.page.expect_response(lambda r: "coupon" in r.url) as resp_info:
             self.page.locator('#form-coupon button[type="submit"]').click()
+        try:
+            self._last_ajax_response = resp_info.value.json()
+        except Exception:
+            self._last_ajax_response = {}
+        self.page.wait_for_timeout(1000)
         self.page.wait_for_load_state("networkidle")
-        self.page.wait_for_timeout(500)
 
     def apply_gift_certificate(self, code: str):
         """Open the gift certificate accordion, enter code, and submit."""
@@ -277,10 +302,14 @@ class CheckoutPage(BasePage):
             self.page.wait_for_timeout(500)
 
         self.page.fill("#input-voucher", code)
-        with self.page.expect_response(lambda r: "voucher" in r.url):
+        with self.page.expect_response(lambda r: "voucher" in r.url) as resp_info:
             self.page.locator('#form-voucher button[type="submit"]').click()
+        try:
+            self._last_ajax_response = resp_info.value.json()
+        except Exception:
+            self._last_ajax_response = {}
+        self.page.wait_for_timeout(1000)
         self.page.wait_for_load_state("networkidle")
-        self.page.wait_for_timeout(500)
 
     def get_cart_totals(self) -> dict[str, str]:
         """Return cart totals as a dict (e.g. {'Sub-Total': '$500.00'})."""

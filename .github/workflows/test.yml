@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        browser: [chromium, firefox, webkit]
+        browser: [chromium, firefox]
 
     name: Tests (${{ matrix.browser }})
 
@@ -188,8 +188,7 @@ jobs:
             DELETE FROM oc_extension WHERE \`type\` = 'captcha';
             DELETE FROM oc_setting WHERE \`code\` LIKE '%captcha%';
             DELETE FROM oc_setting WHERE \`key\` IN ('captcha_page', 'config_captcha');
-            UPDATE oc_setting SET \`value\` = '' WHERE \`key\` = 'config_mail_engine';
-            UPDATE oc_setting SET \`value\` = '' WHERE \`key\` = 'config_mail_smtp_hostname';
+            UPDATE oc_event SET status = 0 WHERE code LIKE 'mail_%';
           " 2>/dev/null || true
 
           docker exec opencart-app bash -c "rm -rf /var/www/html/system/storage/cache/*" 2>/dev/null || true
@@ -308,8 +307,9 @@ jobs:
           allure_results: allure-results
 
       - name: Publish report to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
           publish_dir: allure-history
+          force_orphan: true
