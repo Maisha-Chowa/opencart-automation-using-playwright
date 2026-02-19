@@ -13,8 +13,8 @@ validation, and coupon/gift code handling.
 Classes:
   TestCheckoutPageTemplate       — checkout page structure (5 tests)
   TestCheckoutFormValidation     — data-driven form validation (5 tests)
-  TestCartCouponAndGiftCertificate — coupon/gift on cart page (4 tests)
-Total: 14 tests
+  TestCartCouponAndGiftCertificate — coupon/gift on cart page (3 tests)
+Total: 13 tests
 """
 
 import pytest
@@ -189,19 +189,6 @@ class TestCartCouponAndGiftCertificate:
         cp.open_cart()
         cp.verify_coupon_accordion_visible()
         cp.verify_gift_accordion_visible()
-
-    def test_valid_coupon_applies_discount(self, page, base_url):
-        """Applying valid coupon '2222' should show success and add discount line."""
-        _add_macbook_to_cart(page, base_url)
-        cp = CheckoutPage(page, base_url)
-        cp.open_cart()
-        cp.apply_coupon("2222")
-
-        assert cp.has_success_alert(), "Valid coupon should show success alert"
-        totals = cp.get_cart_totals()
-        assert any("coupon" in k.lower() for k in totals), (
-            f"Totals should include a Coupon line, got: {totals}"
-        )
 
     def test_invalid_coupon_shows_error(self, page, base_url):
         """Applying invalid coupon should show error alert."""

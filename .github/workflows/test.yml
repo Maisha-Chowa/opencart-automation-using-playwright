@@ -307,9 +307,7 @@ jobs:
           allure_results: allure-results
 
       - name: Publish report to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: allure-history
-          force_orphan: true
+          branch: gh-pages
+          folder: allure-history
